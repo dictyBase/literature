@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli/v2" // Make sure you have this package: go get github.com/urfave/cli/v2
 )
 
-// ESearchResult represents the top-level XML structure for esearch
+// ESearchResult represents the top-level XML structure for esearch.
 type ESearchResult struct {
 	XMLName  xml.Name `xml:"eSearchResult"`
 	Count    string   `xml:"Count"`
@@ -26,13 +26,13 @@ type ESearchResult struct {
 	} `xml:"IdList"`
 }
 
-// PubMedArticleSet represents the top-level XML structure for efetch
+// PubMedArticleSet represents the top-level XML structure for efetch.
 type PubMedArticleSet struct {
 	XMLName        xml.Name        `xml:"PubMedArticleSet"`
 	PubMedArticles []PubMedArticle `xml:"PubMedArticle"`
 }
 
-// PubMedArticle represents a single PubMed article
+// PubMedArticle represents a single PubMed article.
 type PubMedArticle struct {
 	XMLName         xml.Name `xml:"PubMedArticle"`
 	MedlineCitation struct {
@@ -41,6 +41,67 @@ type PubMedArticle struct {
 		} `xml:"Article"`
 		PMID string `xml:"PMID"`
 	} `xml:"MedlineCitation"`
+}
+
+func searchPubMed(query string) (*ESearchResult, error) {
+	esearchURL := fmt.Sprintf(
+		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=%s&retmax=10&retmode=xml",
+		url.QueryEscape(query),
+	)
+
+	// #nosec G107
+	resp, err := http.Get(esearchURL)
+	if err != nil {
+		return nil, fmt.Errorf("error making esearch request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading esearch response body: %w", err)
+	}
+
+	var esearchResult ESearchResult
+	if err := xml.Unmarshal(body, &esearchResult); err != nil {
+		return nil, fmt.Errorf(
+			"error unmarshaling esearch XML: %w\nXML:\n%s",
+			err,
+			string(body),
+		)
+	}
+
+	return &esearchResult, nil
+}
+
+func fetchPubMedDetails(ids []string) (*PubMedArticleSet, error) {
+	idString := strings.Join(ids, ",")
+	efetchURL := fmt.Sprintf(
+		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=%s&retmode=xml",
+		idString,
+	)
+
+	// #nosec G107
+	resp, err := http.Get(efetchURL)
+	if err != nil {
+		return nil, fmt.Errorf("error making efetch request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading efetch response body: %w", err)
+	}
+
+	var articleSet PubMedArticleSet
+	if err := xml.Unmarshal(body, &articleSet); err != nil {
+		return nil, fmt.Errorf(
+			"error unmarshaling efetch XML: %w\nXML:\n%s",
+			err,
+			string(body),
+		)
+	}
+
+	return &articleSet, nil
 }
 
 func main() {
@@ -66,40 +127,9 @@ func main() {
 
 			fmt.Printf("Searching PubMed for: '%s'\n", searchTerm)
 
-			// 1. ESearch: Find PubMed IDs for the query
-			// We request up to 10 results (retmax=10)
-			esearchURL := fmt.Sprintf(
-				"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=%s&retmax=10&retmode=xml",
-				url.QueryEscape(searchTerm),
-			)
-
-			resp, err := http.Get(esearchURL)
+			esearchResult, err := searchPubMed(searchTerm)
 			if err != nil {
-				return cli.Exit(
-					fmt.Sprintf("Error making esearch request: %v", err),
-					1,
-				)
-			}
-			defer resp.Body.Close()
-
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return cli.Exit(
-					fmt.Sprintf("Error reading esearch response body: %v", err),
-					1,
-				)
-			}
-
-			var esearchResult ESearchResult
-			if err := xml.Unmarshal(body, &esearchResult); err != nil {
-				return cli.Exit(
-					fmt.Sprintf(
-						"Error unmarshaling esearch XML: %v\nXML:\n%s",
-						err,
-						string(body),
-					),
-					1,
-				)
+				return cli.Exit(err.Error(), 1)
 			}
 
 			if len(esearchResult.IDList.IDs) == 0 {
@@ -113,40 +143,9 @@ func main() {
 				len(esearchResult.IDList.IDs),
 			)
 
-			// 2. EFetch: Retrieve details (specifically title) for the found IDs
-			ids := strings.Join(esearchResult.IDList.IDs, ",")
-			efetchURL := fmt.Sprintf(
-				"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=%s&retmode=xml",
-				ids,
-			)
-
-			resp, err = http.Get(efetchURL)
+			articleSet, err := fetchPubMedDetails(esearchResult.IDList.IDs)
 			if err != nil {
-				return cli.Exit(
-					fmt.Sprintf("Error making efetch request: %v", err),
-					1,
-				)
-			}
-			defer resp.Body.Close()
-
-			body, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return cli.Exit(
-					fmt.Sprintf("Error reading efetch response body: %v", err),
-					1,
-				)
-			}
-
-			var articleSet PubMedArticleSet
-			if err := xml.Unmarshal(body, &articleSet); err != nil {
-				return cli.Exit(
-					fmt.Sprintf(
-						"Error unmarshaling efetch XML: %v\nXML:\n%s",
-						err,
-						string(body),
-					),
-					1,
-				)
+				return cli.Exit(err.Error(), 1)
 			}
 
 			fmt.Println("--- Retrieved Articles (PMID and Title) ---")
