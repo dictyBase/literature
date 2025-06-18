@@ -36,13 +36,39 @@ type PubMedArticle struct {
 	XMLName         xml.Name `xml:"PubmedArticle"`
 	MedlineCitation struct {
 		Article struct {
+			Journal struct {
+				Title        string `xml:"Title"`
+				JournalIssue struct {
+					PubDate struct {
+						Year  string `xml:"Year"`
+						Month string `xml:"Month"`
+					} `xml:"PubDate"`
+				} `xml:"JournalIssue"`
+			} `xml:"Journal"`
 			ArticleTitle string `xml:"ArticleTitle"`
-			Abstract     struct {
+			Pagination   struct {
+				MedlinePgn string `xml:"MedlinePgn"`
+			} `xml:"Pagination"`
+			Abstract struct {
 				AbstractText string `xml:"AbstractText"`
 			} `xml:"Abstract"`
+			AuthorList struct {
+				Authors []struct {
+					LastName string `xml:"LastName"`
+					ForeName string `xml:"ForeName"`
+				} `xml:"Author"`
+			} `xml:"AuthorList"`
 		} `xml:"Article"`
 		PMID string `xml:"PMID"`
 	} `xml:"MedlineCitation"`
+	PubmedData struct {
+		ArticleIdList struct {
+			ArticleIds []struct {
+				IDType string `xml:"IdType,attr"`
+				Value  string `xml:",chardata"`
+			} `xml:"ArticleId"`
+		} `xml:"ArticleIdList"`
+	} `xml:"PubmedData"`
 }
 
 func searchPubMed(query string) (*ESearchResult, error) {
@@ -180,6 +206,31 @@ func getArticleAction(c *cli.Context) error {
 
 	article := articleSet.PubMedArticles[0]
 	fmt.Printf("Title: %s\n", article.MedlineCitation.Article.ArticleTitle)
+
+	pubDate := fmt.Sprintf("%s %s", article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Month, article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Year)
+	fmt.Printf("Publication Date: %s\n", pubDate)
+
+	fmt.Printf("Journal: %s\n", article.MedlineCitation.Article.Journal.Title)
+
+	var authors []string
+	for _, author := range article.MedlineCitation.Article.AuthorList.Authors {
+		authors = append(authors, fmt.Sprintf("%s %s", author.ForeName, author.LastName))
+	}
+	fmt.Printf("Authors: %s\n", strings.Join(authors, ", "))
+
+	fmt.Printf("Pages: %s\n", article.MedlineCitation.Article.Pagination.MedlinePgn)
+
+	var doi string
+	for _, id := range article.PubmedData.ArticleIdList.ArticleIds {
+		if id.IDType == "doi" {
+			doi = id.Value
+			break
+		}
+	}
+	if doi != "" {
+		fmt.Printf("DOI: %s\n", doi)
+	}
+
 	fmt.Printf(
 		"Abstract: %s\n",
 		article.MedlineCitation.Article.Abstract.AbstractText,
