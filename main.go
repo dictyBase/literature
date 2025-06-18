@@ -44,7 +44,7 @@ type PubMedArticle struct {
 
 func searchPubMed(query string) (*ESearchResult, error) {
 	esearchURL := fmt.Sprintf(
-		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=%s&retmax=10&retmode=xml",
+		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=%s&retmax=10&retmode=xml&usehistory=y",
 		url.QueryEscape(query),
 	)
 
@@ -63,10 +63,11 @@ func searchPubMed(query string) (*ESearchResult, error) {
 	return esearchResult, nil
 }
 
-func fetchPubMedDetails(ids []string) (*PubMedArticleSet, error) {
+func fetchPubMedDetails(webEnv, queryKey string) (*PubMedArticleSet, error) {
 	efetchURL := fmt.Sprintf(
-		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=%s&retmode=xml",
-		strings.Join(ids, ","),
+		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&WebEnv=%s&query_key=%s&retmax=10",
+		webEnv,
+		queryKey,
 	)
 
 	// #nosec G107
@@ -104,7 +105,7 @@ func searchAction(c *cli.Context) error {
 		"retrieving", len(esearchResult.IDList.IDs),
 	)
 
-	articleSet, err := fetchPubMedDetails(esearchResult.IDList.IDs)
+	articleSet, err := fetchPubMedDetails(esearchResult.WebEnv, esearchResult.QueryKey)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
