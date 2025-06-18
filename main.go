@@ -37,6 +37,9 @@ type PubMedArticle struct {
 	MedlineCitation struct {
 		Article struct {
 			ArticleTitle string `xml:"ArticleTitle"`
+			Abstract     struct {
+				AbstractText string `xml:"AbstractText"`
+			} `xml:"Abstract"`
 		} `xml:"Article"`
 		PMID string `xml:"PMID"`
 	} `xml:"MedlineCitation"`
@@ -68,6 +71,27 @@ func fetchPubMedDetails(webEnv, queryKey string) (*PubMedArticleSet, error) {
 		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&WebEnv=%s&query_key=%s&retmax=10",
 		webEnv,
 		queryKey,
+	)
+
+	// #nosec G107
+	resp, err := http.Get(efetchURL)
+	if err != nil {
+		return nil, fmt.Errorf("error making efetch request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	articleSet := &PubMedArticleSet{}
+	if err := xml.NewDecoder(resp.Body).Decode(articleSet); err != nil {
+		return nil, fmt.Errorf("error unmarshaling efetch XML: %w", err)
+	}
+
+	return articleSet, nil
+}
+
+func fetchPubMedArticle(pmid string) (*PubMedArticleSet, error) {
+	efetchURL := fmt.Sprintf(
+		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmode=xml&id=%s",
+		pmid,
 	)
 
 	// #nosec G107
@@ -137,6 +161,33 @@ func searchAction(c *cli.Context) error {
 	return nil
 }
 
+func getArticleAction(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return cli.Exit("PubMed ID is required.", 1)
+	}
+	pmid := c.Args().First()
+	slog.Info("Fetching PubMed article", "pmid", pmid)
+
+	articleSet, err := fetchPubMedArticle(pmid)
+	if err != nil {
+		return cli.Exit(err.Error(), 1)
+	}
+
+	if len(articleSet.PubMedArticles) == 0 {
+		slog.Info("No PubMed article found for the given ID.")
+		return nil
+	}
+
+	article := articleSet.PubMedArticles[0]
+	fmt.Printf("Title: %s\n", article.MedlineCitation.Article.ArticleTitle)
+	fmt.Printf(
+		"Abstract: %s\n",
+		article.MedlineCitation.Article.Abstract.AbstractText,
+	)
+
+	return nil
+}
+
 func main() {
 	app := &cli.App{
 		Name:  "pubmed",
@@ -155,6 +206,13 @@ func main() {
 					},
 				},
 				Action: searchAction,
+			},
+			{
+				Name:      "get",
+				Aliases:   []string{"g"},
+				Usage:     "Get article details for a given PubMed ID.",
+				ArgsUsage: "<PubMed ID>",
+				Action:    getArticleAction,
 			},
 		},
 	}
