@@ -27,13 +27,13 @@ type ESearchResult struct {
 
 // PubMedArticleSet represents the top-level XML structure for efetch.
 type PubMedArticleSet struct {
-	XMLName        xml.Name        `xml:"PubMedArticleSet"`
-	PubMedArticles []PubMedArticle `xml:"PubMedArticle"`
+	XMLName        xml.Name        `xml:"PubmedArticleSet"`
+	PubMedArticles []PubMedArticle `xml:"PubmedArticle"`
 }
 
 // PubMedArticle represents a single PubMed article.
 type PubMedArticle struct {
-	XMLName         xml.Name `xml:"PubMedArticle"`
+	XMLName         xml.Name `xml:"PubmedArticle"`
 	MedlineCitation struct {
 		Article struct {
 			ArticleTitle string `xml:"ArticleTitle"`
@@ -105,7 +105,10 @@ func searchAction(c *cli.Context) error {
 		"retrieving", len(esearchResult.IDList.IDs),
 	)
 
-	articleSet, err := fetchPubMedDetails(esearchResult.WebEnv, esearchResult.QueryKey)
+	articleSet, err := fetchPubMedDetails(
+		esearchResult.WebEnv,
+		esearchResult.QueryKey,
+	)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -136,17 +139,24 @@ func searchAction(c *cli.Context) error {
 
 func main() {
 	app := &cli.App{
-		Name:  "pubmed-search",
-		Usage: "Search PubMed for articles and list their IDs and titles.",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:     "query",
-				Aliases:  []string{"q"},
-				Usage:    "Search term for PubMed (e.g., 'CRISPR gene editing')",
-				Required: true,
+		Name:  "pubmed",
+		Usage: "A tool to interact with PubMed.",
+		Commands: []*cli.Command{
+			{
+				Name:    "search",
+				Aliases: []string{"s"},
+				Usage:   "Search PubMed for articles and list their IDs and titles.",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "query",
+						Aliases:  []string{"q"},
+						Usage:    "Search term for PubMed (e.g., 'CRISPR gene editing')",
+						Required: true,
+					},
+				},
+				Action: searchAction,
 			},
 		},
-		Action: searchAction,
 	}
 
 	if err := app.Run(os.Args); err != nil {
