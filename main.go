@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -118,14 +118,7 @@ func main() {
 		},
 		Action: func(c *cli.Context) error {
 			searchTerm := c.String("query")
-			if searchTerm == "" {
-				return cli.Exit(
-					"Error: A search query is required. Use --query or -q.",
-					1,
-				)
-			}
-
-			fmt.Printf("Searching PubMed for: '%s'\n", searchTerm)
+			slog.Info("Searching PubMed", "query", searchTerm)
 
 			esearchResult, err := searchPubMed(searchTerm)
 			if err != nil {
@@ -133,14 +126,14 @@ func main() {
 			}
 
 			if len(esearchResult.IDList.IDs) == 0 {
-				fmt.Println("No PubMed IDs found for the query.")
+				slog.Info("No PubMed IDs found for the query.")
 				return nil
 			}
 
-			fmt.Printf(
-				"Found %s articles. Retrieving titles for the first %d...\n\n",
-				esearchResult.Count,
-				len(esearchResult.IDList.IDs),
+			slog.Info(
+				"Found articles",
+				"count", esearchResult.Count,
+				"retrieving", len(esearchResult.IDList.IDs),
 			)
 
 			articleSet, err := fetchPubMedDetails(esearchResult.IDList.IDs)
@@ -148,21 +141,33 @@ func main() {
 				return cli.Exit(err.Error(), 1)
 			}
 
-			fmt.Println("--- Retrieved Articles (PMID and Title) ---")
+			var results strings.Builder
+			results.WriteString("--- Retrieved Articles (PMID and Title) ---\n")
 			for i, article := range articleSet.PubMedArticles {
-				fmt.Printf("%d. PMID: %s\n", i+1, article.MedlineCitation.PMID)
-				fmt.Printf(
+				results.WriteString(
+					fmt.Sprintf(
+						"%d. PMID: %s\n",
+						i+1,
+						article.MedlineCitation.PMID,
+					),
+				)
+				results.WriteString(fmt.Sprintf(
 					"   Title: %s\n",
 					article.MedlineCitation.Article.ArticleTitle,
+				))
+				results.WriteString(
+					"--------------------------------------------\n",
 				)
-				fmt.Println("--------------------------------------------")
 			}
+
+			fmt.Print(results.String())
 
 			return nil
 		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		slog.Error("application failed to run", "error", err)
+		os.Exit(1)
 	}
 }
