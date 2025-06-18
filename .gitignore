@@ -1,2 +1,3 @@
 .golangci.bck.yml
 .tool-versions
+.aider*
