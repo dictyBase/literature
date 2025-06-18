@@ -1,3 +1,6 @@
 .golangci.bck.yml
 .tool-versions
 .aider*
+pubmed
+efetch.xml
+efetch-single.xml
