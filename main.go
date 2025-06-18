@@ -31,6 +31,18 @@ type PubMedArticleSet struct {
 	PubMedArticles []PubMedArticle `xml:"PubmedArticle"`
 }
 
+// Author represents an author of an article.
+type Author struct {
+	LastName string `xml:"LastName"`
+	ForeName string `xml:"ForeName"`
+}
+
+// ArticleID represents an identifier for an article, like DOI or PMID.
+type ArticleID struct {
+	IDType string `xml:"IdType,attr"`
+	Value  string `xml:",chardata"`
+}
+
 // PubMedArticle represents a single PubMed article.
 type PubMedArticle struct {
 	XMLName         xml.Name `xml:"PubmedArticle"`
@@ -53,20 +65,14 @@ type PubMedArticle struct {
 				AbstractText string `xml:"AbstractText"`
 			} `xml:"Abstract"`
 			AuthorList struct {
-				Authors []struct {
-					LastName string `xml:"LastName"`
-					ForeName string `xml:"ForeName"`
-				} `xml:"Author"`
+				Authors []Author `xml:"Author"`
 			} `xml:"AuthorList"`
 		} `xml:"Article"`
 		PMID string `xml:"PMID"`
 	} `xml:"MedlineCitation"`
 	PubmedData struct {
 		ArticleIdList struct {
-			ArticleIds []struct {
-				IDType string `xml:"IdType,attr"`
-				Value  string `xml:",chardata"`
-			} `xml:"ArticleId"`
+			ArticleIds []ArticleID `xml:"ArticleId"`
 		} `xml:"ArticleIdList"`
 	} `xml:"PubmedData"`
 }
@@ -133,6 +139,31 @@ func fetchPubMedArticle(pmid string) (*PubMedArticleSet, error) {
 	}
 
 	return articleSet, nil
+}
+
+func Map[T, U any](ts []T, f func(T) U) []U {
+	us := make([]U, len(ts))
+	for i, t := range ts {
+		us[i] = f(t)
+	}
+	return us
+}
+
+func Find[T any](slice []T, predicate func(T) bool) (*T, bool) {
+	for i := range slice {
+		if predicate(slice[i]) {
+			return &slice[i], true
+		}
+	}
+	return nil, false
+}
+
+func formatAuthor(author Author) string {
+	return fmt.Sprintf("%s %s", author.ForeName, author.LastName)
+}
+
+func isDOI(id ArticleID) bool {
+	return id.IDType == "doi"
 }
 
 func searchAction(c *cli.Context) error {
@@ -207,28 +238,33 @@ func getArticleAction(c *cli.Context) error {
 	article := articleSet.PubMedArticles[0]
 	fmt.Printf("Title: %s\n", article.MedlineCitation.Article.ArticleTitle)
 
-	pubDate := fmt.Sprintf("%s %s", article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Month, article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Year)
+	pubDate := fmt.Sprintf(
+		"%s %s",
+		article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Month,
+		article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Year,
+	)
 	fmt.Printf("Publication Date: %s\n", pubDate)
 
 	fmt.Printf("Journal: %s\n", article.MedlineCitation.Article.Journal.Title)
 
-	var authors []string
-	for _, author := range article.MedlineCitation.Article.AuthorList.Authors {
-		authors = append(authors, fmt.Sprintf("%s %s", author.ForeName, author.LastName))
-	}
+	authors := Map(
+		article.MedlineCitation.Article.AuthorList.Authors,
+		formatAuthor,
+	)
 	fmt.Printf("Authors: %s\n", strings.Join(authors, ", "))
 
-	fmt.Printf("Pages: %s\n", article.MedlineCitation.Article.Pagination.MedlinePgn)
+	fmt.Printf(
+		"Pages: %s\n",
+		article.MedlineCitation.Article.Pagination.MedlinePgn,
+	)
 
-	var doi string
-	for _, id := range article.PubmedData.ArticleIdList.ArticleIds {
-		if id.IDType == "doi" {
-			doi = id.Value
-			break
-		}
-	}
-	if doi != "" {
-		fmt.Printf("DOI: %s\n", doi)
+	doiArticleID, found := Find(
+		article.PubmedData.ArticleIdList.ArticleIds,
+		isDOI,
+	)
+
+	if found {
+		fmt.Printf("DOI: %s\n", doiArticleID.Value)
 	}
 
 	fmt.Printf(
