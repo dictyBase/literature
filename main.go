@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -56,28 +55,18 @@ func searchPubMed(query string) (*ESearchResult, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading esearch response body: %w", err)
+	esearchResult := &ESearchResult{}
+	if err := xml.NewDecoder(resp.Body).Decode(esearchResult); err != nil {
+		return nil, fmt.Errorf("error unmarshaling esearch XML: %w", err)
 	}
 
-	var esearchResult ESearchResult
-	if err := xml.Unmarshal(body, &esearchResult); err != nil {
-		return nil, fmt.Errorf(
-			"error unmarshaling esearch XML: %w\nXML:\n%s",
-			err,
-			string(body),
-		)
-	}
-
-	return &esearchResult, nil
+	return esearchResult, nil
 }
 
 func fetchPubMedDetails(ids []string) (*PubMedArticleSet, error) {
-	idString := strings.Join(ids, ",")
 	efetchURL := fmt.Sprintf(
 		"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=%s&retmode=xml",
-		idString,
+		strings.Join(ids, ","),
 	)
 
 	// #nosec G107
@@ -87,21 +76,12 @@ func fetchPubMedDetails(ids []string) (*PubMedArticleSet, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading efetch response body: %w", err)
+	articleSet := &PubMedArticleSet{}
+	if err := xml.NewDecoder(resp.Body).Decode(articleSet); err != nil {
+		return nil, fmt.Errorf("error unmarshaling efetch XML: %w", err)
 	}
 
-	var articleSet PubMedArticleSet
-	if err := xml.Unmarshal(body, &articleSet); err != nil {
-		return nil, fmt.Errorf(
-			"error unmarshaling efetch XML: %w\nXML:\n%s",
-			err,
-			string(body),
-		)
-	}
-
-	return &articleSet, nil
+	return articleSet, nil
 }
 
 func searchAction(c *cli.Context) error {
