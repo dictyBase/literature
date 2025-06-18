@@ -104,6 +104,55 @@ func fetchPubMedDetails(ids []string) (*PubMedArticleSet, error) {
 	return &articleSet, nil
 }
 
+func searchAction(c *cli.Context) error {
+	searchTerm := c.String("query")
+	slog.Info("Searching PubMed", "query", searchTerm)
+
+	esearchResult, err := searchPubMed(searchTerm)
+	if err != nil {
+		return cli.Exit(err.Error(), 1)
+	}
+
+	if len(esearchResult.IDList.IDs) == 0 {
+		slog.Info("No PubMed IDs found for the query.")
+		return nil
+	}
+
+	slog.Info(
+		"Found articles",
+		"count", esearchResult.Count,
+		"retrieving", len(esearchResult.IDList.IDs),
+	)
+
+	articleSet, err := fetchPubMedDetails(esearchResult.IDList.IDs)
+	if err != nil {
+		return cli.Exit(err.Error(), 1)
+	}
+
+	var results strings.Builder
+	results.WriteString("--- Retrieved Articles (PMID and Title) ---\n")
+	for i, article := range articleSet.PubMedArticles {
+		results.WriteString(
+			fmt.Sprintf(
+				"%d. PMID: %s\n",
+				i+1,
+				article.MedlineCitation.PMID,
+			),
+		)
+		results.WriteString(fmt.Sprintf(
+			"   Title: %s\n",
+			article.MedlineCitation.Article.ArticleTitle,
+		))
+		results.WriteString(
+			"--------------------------------------------\n",
+		)
+	}
+
+	fmt.Print(results.String())
+
+	return nil
+}
+
 func main() {
 	app := &cli.App{
 		Name:  "pubmed-search",
@@ -116,54 +165,7 @@ func main() {
 				Required: true,
 			},
 		},
-		Action: func(c *cli.Context) error {
-			searchTerm := c.String("query")
-			slog.Info("Searching PubMed", "query", searchTerm)
-
-			esearchResult, err := searchPubMed(searchTerm)
-			if err != nil {
-				return cli.Exit(err.Error(), 1)
-			}
-
-			if len(esearchResult.IDList.IDs) == 0 {
-				slog.Info("No PubMed IDs found for the query.")
-				return nil
-			}
-
-			slog.Info(
-				"Found articles",
-				"count", esearchResult.Count,
-				"retrieving", len(esearchResult.IDList.IDs),
-			)
-
-			articleSet, err := fetchPubMedDetails(esearchResult.IDList.IDs)
-			if err != nil {
-				return cli.Exit(err.Error(), 1)
-			}
-
-			var results strings.Builder
-			results.WriteString("--- Retrieved Articles (PMID and Title) ---\n")
-			for i, article := range articleSet.PubMedArticles {
-				results.WriteString(
-					fmt.Sprintf(
-						"%d. PMID: %s\n",
-						i+1,
-						article.MedlineCitation.PMID,
-					),
-				)
-				results.WriteString(fmt.Sprintf(
-					"   Title: %s\n",
-					article.MedlineCitation.Article.ArticleTitle,
-				))
-				results.WriteString(
-					"--------------------------------------------\n",
-				)
-			}
-
-			fmt.Print(results.String())
-
-			return nil
-		},
+		Action: searchAction,
 	}
 
 	if err := app.Run(os.Args); err != nil {
