@@ -190,6 +190,75 @@ func fetchOADetails(pmcID string) (*OARecord, error) {
 	return &oaResponse.Records.Records[0], nil
 }
 
+// PubMedArticleDownloader provides methods to download a PubMed article PDF.
+type PubMedArticleDownloader struct {
+	article *PubMedArticle
+	pdfLink *OALink
+}
+
+// NewPubMedArticleDownloader creates a new downloader for a given PubMed ID.
+// It fetches the article metadata upon creation.
+func NewPubMedArticleDownloader(pmid string) (*PubMedArticleDownloader, error) {
+	articleSet, err := fetchPubMedArticle(pmid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch pubmed article %s: %w", pmid, err)
+	}
+
+	if len(articleSet.PubMedArticles) == 0 {
+		return nil, fmt.Errorf("no PubMed article found for the given ID: %s", pmid)
+	}
+
+	return &PubMedArticleDownloader{
+		article: &articleSet.PubMedArticles[0],
+	}, nil
+}
+
+// IsPDFAvailable checks if a downloadable PDF is available for the article.
+func (d *PubMedArticleDownloader) IsPDFAvailable() (bool, error) {
+	if d.pdfLink != nil {
+		return true, nil
+	}
+
+	pmcArticleID, found := Find(
+		d.article.PubmedData.ArticleIdList.ArticleIds,
+		isPMCID,
+	)
+	if !found {
+		return false, nil
+	}
+	slog.Info("Found PMC ID", "pmcid", pmcArticleID.Value)
+
+	oaRecord, err := fetchOADetails(pmcArticleID.Value)
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch Open Access details: %w", err)
+	}
+
+	pdfLink, found := Find(oaRecord.Links, isPDFLink)
+	if !found {
+		return false, nil
+	}
+
+	d.pdfLink = pdfLink
+	return true, nil
+}
+
+// DownloadPDF downloads the article's PDF to the specified file path.
+// IsPDFAvailable should be called and return true before calling this method.
+func (d *PubMedArticleDownloader) DownloadPDF(filePath string) error {
+	if d.pdfLink == nil {
+		return fmt.Errorf("PDF link not available or not checked. Call IsPDFAvailable first")
+	}
+
+	slog.Debug("Found PDF FTP link", "url", d.pdfLink.HREF)
+
+	err := downloadFileFTP(d.pdfLink.HREF, filePath)
+	if err != nil {
+		return fmt.Errorf("failed to download file via FTP: %w", err)
+	}
+	slog.Info("Article download complete", "file", filePath)
+	return nil
+}
+
 func downloadFileFTP(ftpURL string, filePath string) error {
 	parsedURL, err := url.Parse(ftpURL)
 	if err != nil {
@@ -234,7 +303,6 @@ func downloadFileFTP(ftpURL string, filePath string) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	slog.Info("File downloaded successfully", "filename", filePath)
 	return nil
 }
 
