@@ -13,7 +13,9 @@ func searchAction(c *cli.Context) error {
 	searchTerm := c.String("query")
 	slog.Info("Searching PubMed", "query", searchTerm)
 
-	esearchResult, err := searchPubMed(searchTerm)
+	searchService := NewSearchService()
+
+	esearchResult, err := searchService.SearchPubMed(searchTerm)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
@@ -29,7 +31,7 @@ func searchAction(c *cli.Context) error {
 		"retrieving", len(esearchResult.IDList.IDs),
 	)
 
-	articleSet, err := fetchPubMedDetails(
+	articleSet, err := searchService.FetchPubMedDetails(
 		esearchResult.WebEnv,
 		esearchResult.QueryKey,
 	)
