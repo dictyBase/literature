@@ -26,3 +26,23 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
 	}
 	return result
 }
+
+// Curried versions
+
+func CurriedMap[T, U any](f func(T) U) func([]T) []U {
+	return func(ts []T) []U {
+		return Map(ts, f)
+	}
+}
+
+func CurriedFind[T any](predicate func(T) bool) func([]T) (*T, bool) {
+	return func(slice []T) (*T, bool) {
+		return Find(slice, predicate)
+	}
+}
+
+func CurriedFilter[T any](predicate func(T) bool) func([]T) []T {
+	return func(slice []T) []T {
+		return Filter(slice, predicate)
+	}
+}
