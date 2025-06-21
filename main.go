@@ -118,6 +118,68 @@ func getArticleAction(c *cli.Context) error {
 	return nil
 }
 
+func downloadAction(c *cli.Context) error {
+	if c.NArg() == 0 {
+		return cli.Exit("PubMed ID is required.", 1)
+	}
+	pmid := c.Args().First()
+	filePath := c.String("file")
+
+	slog.Info(
+		"Downloading article",
+		"pmid",
+		pmid,
+		"file",
+		filePath,
+	)
+
+	articleSet, err := fetchPubMedArticle(pmid)
+	if err != nil {
+		return cli.Exit(err.Error(), 1)
+	}
+
+	if len(articleSet.PubMedArticles) == 0 {
+		slog.Info("No PubMed article found for the given ID.")
+		return nil
+	}
+
+	article := articleSet.PubMedArticles[0]
+	pmcArticleID, found := Find(
+		article.PubmedData.ArticleIdList.ArticleIds,
+		isPMCID,
+	)
+	if !found {
+		return cli.Exit(
+			"No PMC ID found for this article. Cannot download PDF.",
+			1,
+		)
+	}
+	slog.Info("Found PMC ID", "pmcid", pmcArticleID.Value)
+
+	oaRecord, err := fetchOADetails(pmcArticleID.Value)
+	if err != nil {
+		return cli.Exit(
+			fmt.Sprintf("Failed to fetch Open Access details: %v", err),
+			1,
+		)
+	}
+	pdfLink, found := Find(oaRecord.Links, isPDFLink)
+	if !found {
+		return cli.Exit("No PDF download link found for this article.", 1)
+	}
+	slog.Debug("Found PDF FTP link", "url", pdfLink.HREF)
+
+	err = downloadFileFTP(pdfLink.HREF, filePath)
+	if err != nil {
+		return cli.Exit(
+			fmt.Sprintf("Failed to download file via FTP: %v", err),
+			1,
+		)
+	}
+	slog.Info("Download complete of", "file ", filePath)
+	return nil
+}
+
 func main() {
 	app := &cli.App{
 		Name:  "pubmed",
@@ -143,6 +205,26 @@ func main() {
 				Usage:     "Get article details for a given PubMed ID.",
 				ArgsUsage: "<PubMed ID>",
 				Action:    getArticleAction,
+			},
+			{
+				Name:      "download",
+				Aliases:   []string{"d"},
+				Usage:     "Download a PubMed article and save it to a file.",
+				ArgsUsage: "<PubMed ID>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "file",
+						Aliases:  []string{"f"},
+						Usage:    "Path to save the article XML to.",
+						Required: true,
+					},
+					&cli.BoolFlag{
+						Name:  "pmc",
+						Usage: "Download from PubMed Central if available.",
+						Value: false,
+					},
+				},
+				Action: downloadAction,
 			},
 		},
 	}
