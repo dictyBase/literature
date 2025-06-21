@@ -68,17 +68,11 @@ func getArticleAction(c *cli.Context) error {
 	pmid := c.Args().First()
 	slog.Info("Fetching PubMed article", "pmid", pmid)
 
-	articleSet, err := fetchPubMedArticle(pmid)
+	articleService := NewArticleService()
+	article, err := articleService.FetchArticle(pmid)
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
-
-	if len(articleSet.PubMedArticles) == 0 {
-		slog.Info("No PubMed article found for the given ID.")
-		return nil
-	}
-
-	article := articleSet.PubMedArticles[0]
 	fmt.Printf("Title: %s\n", article.MedlineCitation.Article.ArticleTitle)
 
 	pubDate := fmt.Sprintf(
@@ -102,7 +96,7 @@ func getArticleAction(c *cli.Context) error {
 	)
 
 	doiArticleID, found := Find(
-		article.PubmedData.ArticleIdList.ArticleIds,
+		article.PubmedData.ArticleIdList.ArticleIDs,
 		isDOI,
 	)
 
@@ -133,27 +127,30 @@ func downloadAction(c *cli.Context) error {
 		filePath,
 	)
 
-	downloader, err := NewPubMedArticleDownloader(pmid)
-	if err != nil {
-		return cli.Exit(err.Error(), 1)
-	}
+	pdfService := NewPDFService()
 
 	slog.Info("Checking for PDF availability...")
-	available, err := downloader.IsPDFAvailable()
+
+	available, err := pdfService.IsPDFAvailable(pmid)
 	if err != nil {
+		slog.Error("Failed to check PDF availability", "error", err)
 		return cli.Exit(err.Error(), 1)
 	}
-
 	if !available {
+		slog.Warn("PDF not available for article", "pmid", pmid)
 		return cli.Exit("Full text PDF is not available for this article.", 1)
 	}
 
-	slog.Info("Full text PDF is available, starting download.")
-	err = downloader.DownloadPDF(filePath)
+	slog.Info("PDF available, found download link", "pmid", pdfService.GetCurrentPMID())
+	slog.Info("Starting PDF download", "file", filePath)
+
+	err = pdfService.DownloadPDF(filePath)
 	if err != nil {
+		slog.Error("PDF download failed", "error", err, "file", filePath)
 		return cli.Exit(err.Error(), 1)
 	}
 
+	slog.Info("PDF download completed successfully", "file", filePath)
 	return nil
 }
 
