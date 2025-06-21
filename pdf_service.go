@@ -243,3 +243,13 @@ func (s *PDFService) DownloadArticlePDF(pmid, filePath string) error {
 
 	return s.DownloadPDF(filePath)
 }
+
+// isPMCID checks if an ArticleID is a PMC ID.
+func isPMCID(id ArticleID) bool {
+	return id.IDType == "pmc"
+}
+
+// isPDFLink checks if an OALink is a PDF download link.
+func isPDFLink(link OALink) bool {
+	return link.Format == "pdf"
+}
