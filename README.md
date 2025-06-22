@@ -186,6 +186,19 @@ be called before `DownloadPDF`.
 - `bool`: True if PDF is available
 - `error`: Error if check fails
 
+##### GetPDFURL
+
+```go
+func (s *PDFService) GetPDFURL() (string, error)
+```
+
+Returns the direct download URL using cached download info.
+`IsPDFAvailable` must be called first and return true.
+
+**Returns:**
+- `string`: Direct download URL for the PDF
+- `error`: Error if no cached download info available
+
 ##### DownloadPDF
 
 ```go
@@ -220,8 +233,22 @@ Convenience method that combines availability check and downloading.
 ```go
 pdfService := NewPDFService()
 
-// Method 1: Check availability first
+// Method 1: Check availability first, then get URL
 available, err := pdfService.IsPDFAvailable("33515252")
+if err != nil {
+    log.Fatal(err)
+}
+
+if available {
+    url, err := pdfService.GetPDFURL()
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("PDF URL: %s\n", url)
+}
+
+// Method 2: Check availability first, then download
+available, err = pdfService.IsPDFAvailable("33515252")
 if err != nil {
     log.Fatal(err)
 }
@@ -234,7 +261,7 @@ if available {
     fmt.Println("PDF downloaded successfully")
 }
 
-// Method 2: Use convenience method
+// Method 3: Use convenience method
 err = pdfService.DownloadArticlePDF("33515252", "article.pdf")
 if err != nil {
     var pdfErr *PDFError
@@ -461,7 +488,7 @@ func main() {
             fmt.Printf("DOI: %s\n", doi)
         }
 
-        // Try to download PDF
+        // Check PDF availability and get URL if available
         available, err := pdfService.IsPDFAvailable(pmid)
         if err != nil {
             fmt.Printf("Error checking PDF availability: %v\n", err)
@@ -469,11 +496,17 @@ func main() {
         }
 
         if available {
+            pdfURL, err := pdfService.GetPDFURL()
+            if err != nil {
+                fmt.Printf("Error getting PDF URL: %v\n", err)
+                continue
+            }
+            fmt.Printf("PDF URL: %s\n", pdfURL)
+            
+            // Optionally download the PDF
             filename := fmt.Sprintf("%s.pdf", pmid)
             err = pdfService.DownloadPDF(filename)
-            if err != nil {
-                fmt.Printf("Error downloading PDF: %v\n", err)
-            } else {
+            if err == nil {
                 fmt.Printf("PDF downloaded: %s\n", filename)
             }
         } else {
