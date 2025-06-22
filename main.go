@@ -46,12 +46,12 @@ func searchAction(c *cli.Context) error {
 			fmt.Sprintf(
 				"%d. PMID: %s\n",
 				i+1,
-				article.MedlineCitation.PMID,
+				article.GetPMID(),
 			),
 		)
 		results.WriteString(fmt.Sprintf(
 			"   Title: %s\n",
-			article.MedlineCitation.Article.ArticleTitle,
+			article.GetTitle(),
 		))
 		results.WriteString(
 			"--------------------------------------------\n",
@@ -75,41 +75,30 @@ func getArticleAction(c *cli.Context) error {
 	if err != nil {
 		return cli.Exit(err.Error(), 1)
 	}
-	fmt.Printf("Title: %s\n", article.MedlineCitation.Article.ArticleTitle)
+	fmt.Printf("Title: %s\n", article.GetTitle())
 
 	pubDate := fmt.Sprintf(
 		"%s %s",
-		article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Month,
-		article.MedlineCitation.Article.Journal.JournalIssue.PubDate.Year,
+		article.GetPubMonth(),
+		article.GetPubYear(),
 	)
 	fmt.Printf("Publication Date: %s\n", pubDate)
 
-	fmt.Printf("Journal: %s\n", article.MedlineCitation.Article.Journal.Title)
+	fmt.Printf("Journal: %s\n", article.GetJournalTitle())
 
 	authors := Map(
-		article.MedlineCitation.Article.AuthorList.Authors,
+		article.GetAuthors(),
 		formatAuthor,
 	)
 	fmt.Printf("Authors: %s\n", strings.Join(authors, ", "))
 
-	fmt.Printf(
-		"Pages: %s\n",
-		article.MedlineCitation.Article.Pagination.MedlinePgn,
-	)
+	fmt.Printf("Pages: %s\n", article.GetPages())
 
-	doiArticleID, found := Find(
-		article.PubmedData.ArticleIdList.ArticleIDs,
-		isDOI,
-	)
-
-	if found {
-		fmt.Printf("DOI: %s\n", doiArticleID.Value)
+	if doi, found := article.GetDOI(); found {
+		fmt.Printf("DOI: %s\n", doi)
 	}
 
-	fmt.Printf(
-		"Abstract: %s\n",
-		article.MedlineCitation.Article.Abstract.AbstractText,
-	)
+	fmt.Printf("Abstract: %s\n", article.GetAbstract())
 
 	return nil
 }
