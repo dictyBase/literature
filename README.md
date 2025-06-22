@@ -1,0 +1,525 @@
+# PubMed API Services Documentation
+
+A comprehensive Go library for interacting with PubMed's E-utilities API,
+providing search functionality, article metadata retrieval, and PDF downloading
+capabilities.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Services](#services)
+  - [SearchService](#searchservice)
+  - [ArticleService](#articleservice)
+  - [PDFService](#pdfservice)
+- [Types and Data Structures](#types-and-data-structures)
+- [Error Handling](#error-handling)
+- [Utility Functions](#utility-functions)
+- [Usage Examples](#usage-examples)
+
+## Overview
+
+This library provides three main services for working with PubMed data:
+
+1. **SearchService**: Search PubMed database and retrieve article IDs
+2. **ArticleService**: Fetch detailed article metadata using PMIDs
+3. **PDFService**: Download full-text PDFs when available through PMC
+
+## Services
+
+### SearchService
+
+Handles PubMed search operations using the E-utilities search API.
+
+#### Constructor
+
+```go
+func NewSearchService(options ...SearchServiceOption) *SearchService
+```
+
+#### Options
+
+- `WithSearchHTTPClient(client *http.Client)`: Set custom HTTP client
+- `WithRetmax(retmax int)`: Set maximum number of results (default: 10)
+
+#### Methods
+
+##### SearchPubMed
+
+```go
+func (s *SearchService) SearchPubMed(query string) (*ESearchResult, error)
+```
+
+Performs a search query against PubMed and returns search results.
+
+**Parameters:**
+- `query`: Search query string (e.g., "diabetes AND treatment")
+
+**Returns:**
+- `*ESearchResult`: Search results containing IDs and metadata
+- `error`: Error if search fails
+
+**Example:**
+```go
+searchService := NewSearchService(WithRetmax(20))
+result, err := searchService.SearchPubMed("machine learning in healthcare")
+if err != nil {
+    log.Fatal(err)
+}
+
+pmids := result.GetIDs()
+fmt.Printf("Found %d articles\n", len(pmids))
+```
+
+##### FetchPubMedDetails
+
+```go
+func (s *SearchService) FetchPubMedDetails(webEnv, queryKey string) (*PubMedArticleSet, error)
+```
+
+Retrieves detailed article information using WebEnv and QueryKey from search results.
+
+**Parameters:**
+- `webEnv`: Web environment string from search results
+- `queryKey`: Query key from search results
+
+**Returns:**
+- `*PubMedArticleSet`: Set of detailed article metadata
+- `error`: Error if fetch fails
+
+**Example:**
+```go
+searchResult, _ := searchService.SearchPubMed("COVID-19")
+articles, err := searchService.FetchPubMedDetails(
+    searchResult.WebEnv,
+    searchResult.QueryKey,
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, article := range articles.PubMedArticles {
+    fmt.Printf("Title: %s\n", article.GetTitle())
+}
+```
+
+### ArticleService
+
+Handles fetching PubMed article metadata for specific PMIDs.
+
+#### Constructor
+
+```go
+func NewArticleService() *ArticleService
+```
+
+#### Methods
+
+##### FetchArticle
+
+```go
+func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error)
+```
+
+Retrieves article metadata for the given PMID.
+
+**Parameters:**
+- `pmid`: PubMed ID as string
+
+**Returns:**
+- `*PubMedArticle`: Complete article metadata
+- `error`: Error if article not found or fetch fails
+
+**Example:**
+```go
+articleService := NewArticleService()
+article, err := articleService.FetchArticle("33515252")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Title: %s\n", article.GetTitle())
+fmt.Printf("Journal: %s\n", article.GetJournalTitle())
+fmt.Printf("Year: %s\n", article.GetPubYear())
+fmt.Printf("Abstract: %s\n", article.GetAbstract())
+
+// Get authors
+authors := article.GetAuthors()
+for _, author := range authors {
+    fmt.Printf("Author: %s %s\n", author.ForeName, author.LastName)
+}
+
+// Get DOI if available
+if doi, found := article.GetDOI(); found {
+    fmt.Printf("DOI: %s\n", doi)
+}
+```
+
+### PDFService
+
+Handles PDF link discovery and downloading from PMC (PubMed Central).
+
+#### Constructor
+
+```go
+func NewPDFService(options ...PDFServiceOption) *PDFService
+```
+
+#### Options
+
+- `WithHTTPClient(client *http.Client)`: Set custom HTTP client
+
+#### Methods
+
+##### IsPDFAvailable
+
+```go
+func (s *PDFService) IsPDFAvailable(pmid string) (bool, error)
+```
+
+Checks if a PDF is available for the given PMID and caches download info. Must
+be called before `DownloadPDF`.
+
+**Parameters:**
+- `pmid`: PubMed ID as string
+
+**Returns:**
+- `bool`: True if PDF is available
+- `error`: Error if check fails
+
+##### DownloadPDF
+
+```go
+func (s *PDFService) DownloadPDF(filePath string) error
+```
+
+Downloads the PDF using cached download info to the specified file.
+`IsPDFAvailable` must be called first and return true.
+
+**Parameters:**
+- `filePath`: Local file path where PDF should be saved
+
+**Returns:**
+- `error`: Error if download fails
+
+##### DownloadArticlePDF (Convenience Method)
+
+```go
+func (s *PDFService) DownloadArticlePDF(pmid, filePath string) error
+```
+
+Convenience method that combines availability check and downloading.
+
+**Parameters:**
+- `pmid`: PubMed ID as string
+- `filePath`: Local file path where PDF should be saved
+
+**Returns:**
+- `error`: Error if PDF not available or download fails
+
+**Example:**
+```go
+pdfService := NewPDFService()
+
+// Method 1: Check availability first
+available, err := pdfService.IsPDFAvailable("33515252")
+if err != nil {
+    log.Fatal(err)
+}
+
+if available {
+    err = pdfService.DownloadPDF("article.pdf")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("PDF downloaded successfully")
+}
+
+// Method 2: Use convenience method
+err = pdfService.DownloadArticlePDF("33515252", "article.pdf")
+if err != nil {
+    var pdfErr *PDFError
+    if errors.As(err, &pdfErr) {
+        switch pdfErr.Type {
+        case PDFErrorPDFNotAvailable:
+            fmt.Println("PDF not available for this article")
+        case PDFErrorDownloadFailed:
+            fmt.Printf("Download failed: %v\n", err)
+        }
+    }
+}
+```
+
+##### GetCurrentPMID
+
+```go
+func (s *PDFService) GetCurrentPMID() string
+```
+
+Returns the currently cached PMID, empty string if none.
+
+## Types and Data Structures
+
+### Article Types
+
+#### PubMedArticle
+
+Represents a single PubMed article with comprehensive metadata.
+
+**Key Methods:**
+- `GetPMID() string`: Returns PubMed ID
+- `GetTitle() string`: Returns article title
+- `GetJournalTitle() string`: Returns journal title
+- `GetAbstract() string`: Returns article abstract
+- `GetAuthors() []Author`: Returns list of authors
+- `GetPages() string`: Returns page range
+- `GetPubYear() string`: Returns publication year
+- `GetPubMonth() string`: Returns publication month
+- `GetArticleIDs() []ArticleID`: Returns all article identifiers
+- `GetDOI() (string, bool)`: Returns DOI if available
+- `GetPMCID() (string, bool)`: Returns PMC ID if available
+
+#### Author
+
+```go
+type Author struct {
+    LastName string `xml:"LastName"`
+    ForeName string `xml:"ForeName"`
+}
+```
+
+#### ArticleID
+
+```go
+type ArticleID struct {
+    IDType string `xml:"IdType,attr"`
+    Value  string `xml:",chardata"`
+}
+```
+
+### Search Types
+
+#### ESearchResult
+
+Represents search results from PubMed.
+
+```go
+type ESearchResult struct {
+    Count    string   // Total number of results
+    RetMax   string   // Maximum results returned
+    RetStart string   // Starting position
+    QueryKey string   // Query key for subsequent requests
+    WebEnv   string   // Web environment for subsequent requests
+    IDList   struct {
+        IDs []string `xml:"Id"`
+    }
+}
+```
+
+**Methods:**
+- `GetIDs() []string`: Returns list of PubMed IDs
+
+### PDF Types
+
+#### PDFDownloadInfo
+
+```go
+type PDFDownloadInfo struct {
+    PMID    string
+    PMCID   string
+    PDFLink *OALink
+}
+```
+
+#### OARecord
+
+```go
+type OARecord struct {
+    ID    string   `xml:"id,attr"`
+    Links []OALink `xml:"link"`
+}
+```
+
+#### OALink
+
+```go
+type OALink struct {
+    Format string `xml:"format,attr"`
+    HREF   string `xml:"href,attr"`
+}
+```
+
+## Error Handling
+
+### PDFError
+
+Specialized error type for PDF-related operations.
+
+```go
+type PDFError struct {
+    PMID string
+    Type PDFErrorType
+    Err  error
+}
+```
+
+#### PDFErrorType Constants
+
+- `PDFErrorArticleNotFound`: Article metadata not found
+- `PDFErrorPMCIDNotFound`: No PMC ID available for article
+- `PDFErrorPDFNotAvailable`: PDF not available in PMC
+- `PDFErrorDownloadFailed`: Download operation failed
+
+**Example Error Handling:**
+```go
+err := pdfService.DownloadArticlePDF("12345", "test.pdf")
+if err != nil {
+    var pdfErr *PDFError
+    if errors.As(err, &pdfErr) {
+        switch pdfErr.Type {
+        case PDFErrorArticleNotFound:
+            fmt.Println("Article not found")
+        case PDFErrorPMCIDNotFound:
+            fmt.Println("Article not available in PMC")
+        case PDFErrorPDFNotAvailable:
+            fmt.Println("PDF not available")
+        case PDFErrorDownloadFailed:
+            fmt.Printf("Download failed: %v\n", pdfErr.Err)
+        }
+    }
+}
+```
+
+## Utility Functions
+
+The library includes generic utility functions for functional programming operations:
+
+### Find
+
+```go
+func Find[T any](slice []T, predicate func(T) bool) (*T, bool)
+```
+
+Finds the first element in a slice matching the predicate.
+
+### Map
+
+```go
+func Map[T, U any](ts []T, f func(T) U) []U
+```
+
+Transforms a slice using the provided function.
+
+### Filter
+
+```go
+func Filter[T any](slice []T, predicate func(T) bool) []T
+```
+
+Filters a slice using the provided predicate.
+
+## Usage Examples
+
+### Complete Workflow Example
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+)
+
+func main() {
+    // 1. Search for articles
+    searchService := NewSearchService(WithRetmax(5))
+    searchResult, err := searchService.SearchPubMed("machine learning healthcare")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    pmids := searchResult.GetIDs()
+    fmt.Printf("Found %d articles\n", len(pmids))
+
+    // 2. Get detailed article information
+    articleService := NewArticleService()
+    pdfService := NewPDFService()
+
+    for _, pmid := range pmids {
+        // Fetch article metadata
+        article, err := articleService.FetchArticle(pmid)
+        if err != nil {
+            fmt.Printf("Error fetching article %s: %v\n", pmid, err)
+            continue
+        }
+
+        fmt.Printf("\nPMID: %s\n", article.GetPMID())
+        fmt.Printf("Title: %s\n", article.GetTitle())
+        fmt.Printf("Journal: %s (%s)\n", article.GetJournalTitle(), article.GetPubYear())
+        
+        // Check for DOI
+        if doi, found := article.GetDOI(); found {
+            fmt.Printf("DOI: %s\n", doi)
+        }
+
+        // Try to download PDF
+        available, err := pdfService.IsPDFAvailable(pmid)
+        if err != nil {
+            fmt.Printf("Error checking PDF availability: %v\n", err)
+            continue
+        }
+
+        if available {
+            filename := fmt.Sprintf("%s.pdf", pmid)
+            err = pdfService.DownloadPDF(filename)
+            if err != nil {
+                fmt.Printf("Error downloading PDF: %v\n", err)
+            } else {
+                fmt.Printf("PDF downloaded: %s\n", filename)
+            }
+        } else {
+            fmt.Println("PDF not available")
+        }
+    }
+}
+```
+
+### Advanced Search with Batch Processing
+
+```go
+func batchProcessArticles(query string, batchSize int) error {
+    searchService := NewSearchService(WithRetmax(batchSize))
+    result, err := searchService.SearchPubMed(query)
+    if err != nil {
+        return err
+    }
+
+    // Get detailed articles using WebEnv/QueryKey for efficiency
+    articles, err := searchService.FetchPubMedDetails(result.WebEnv, result.QueryKey)
+    if err != nil {
+        return err
+    }
+
+    pdfService := NewPDFService()
+    
+    for _, article := range articles.PubMedArticles {
+        fmt.Printf("Processing: %s\n", article.GetTitle())
+        
+        // Extract author names
+        authors := article.GetAuthors()
+        authorNames := Map(authors, func(a Author) string {
+            return fmt.Sprintf("%s %s", a.ForeName, a.LastName)
+        })
+        
+        fmt.Printf("Authors: %v\n", authorNames)
+        
+        // Attempt PDF download
+        pmid := article.GetPMID()
+        err := pdfService.DownloadArticlePDF(pmid, pmid+".pdf")
+        if err == nil {
+            fmt.Printf("Downloaded PDF for %s\n", pmid)
+        }
+    }
+    
+    return nil
+}
+```
