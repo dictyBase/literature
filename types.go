@@ -55,6 +55,13 @@ type ArticleID struct {
 	Value  string `xml:",chardata"`
 }
 
+// PDFDownloadInfo contains information needed to download a PDF.
+type PDFDownloadInfo struct {
+	PMID    string
+	PMCID   string
+	PDFLink *OALink
+}
+
 // PubMedArticle represents a single PubMed article.
 type PubMedArticle struct {
 	XMLName         xml.Name `xml:"PubmedArticle"`
@@ -89,9 +96,67 @@ type PubMedArticle struct {
 	} `xml:"PubmedData"`
 }
 
-// PDFDownloadInfo contains information needed to download a PDF.
-type PDFDownloadInfo struct {
-	PMID    string
-	PMCID   string
-	PDFLink *OALink
+// Convenience methods for PubMedArticle
+
+// GetPMID returns the PubMed ID.
+func (p *PubMedArticle) GetPMID() string {
+	return p.MedlineCitation.PMID
+}
+
+// GetTitle returns the article title.
+func (p *PubMedArticle) GetTitle() string {
+	return p.MedlineCitation.Article.ArticleTitle
+}
+
+// GetJournalTitle returns the journal title.
+func (p *PubMedArticle) GetJournalTitle() string {
+	return p.MedlineCitation.Article.Journal.Title
+}
+
+// GetAbstract returns the article abstract.
+func (p *PubMedArticle) GetAbstract() string {
+	return p.MedlineCitation.Article.Abstract.AbstractText
+}
+
+// GetAuthors returns the list of authors.
+func (p *PubMedArticle) GetAuthors() []Author {
+	return p.MedlineCitation.Article.AuthorList.Authors
+}
+
+// GetPages returns the page range.
+func (p *PubMedArticle) GetPages() string {
+	return p.MedlineCitation.Article.Pagination.MedlinePgn
+}
+
+// GetPubYear returns the publication year.
+func (p *PubMedArticle) GetPubYear() string {
+	return p.MedlineCitation.Article.Journal.JournalIssue.PubDate.Year
+}
+
+// GetPubMonth returns the publication month.
+func (p *PubMedArticle) GetPubMonth() string {
+	return p.MedlineCitation.Article.Journal.JournalIssue.PubDate.Month
+}
+
+// GetArticleIDs returns the list of article identifiers.
+func (p *PubMedArticle) GetArticleIDs() []ArticleID {
+	return p.PubmedData.ArticleIdList.ArticleIDs
+}
+
+// GetDOI returns the DOI if available.
+func (p *PubMedArticle) GetDOI() (string, bool) {
+	doiArticleID, found := Find(p.GetArticleIDs(), isDOI)
+	if found {
+		return doiArticleID.Value, true
+	}
+	return "", false
+}
+
+// GetPMCID returns the PMC ID if available.
+func (p *PubMedArticle) GetPMCID() (string, bool) {
+	pmcArticleID, found := Find(p.GetArticleIDs(), isPMCID)
+	if found {
+		return pmcArticleID.Value, true
+	}
+	return "", false
 }
