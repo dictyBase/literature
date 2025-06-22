@@ -37,6 +37,11 @@ type ESearchResult struct {
 	} `xml:"IdList"`
 }
 
+// GetIDs returns the list of PubMed IDs from the search result.
+func (e *ESearchResult) GetIDs() []string {
+	return e.IDList.IDs
+}
+
 // PubMedArticleSet represents the top-level XML structure for efetch.
 type PubMedArticleSet struct {
 	XMLName        xml.Name        `xml:"PubmedArticleSet"`
