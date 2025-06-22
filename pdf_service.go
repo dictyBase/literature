@@ -227,6 +227,20 @@ func (s *PDFService) downloadFromFTP(ftpURL, filePath string) error {
 	return nil
 }
 
+// GetPDFURL returns the direct download URL using cached download info.
+// IsPDFAvailable must be called first and return true.
+func (s *PDFService) GetPDFURL() (string, error) {
+	if s.downloadInfo == nil {
+		return "", &PDFError{
+			PMID: s.currentPMID,
+			Type: PDFErrorDownloadFailed,
+			Err:  fmt.Errorf("must call IsPDFAvailable first and confirm PDF is available"),
+		}
+	}
+
+	return s.downloadInfo.PDFLink.HREF, nil
+}
+
 // DownloadArticlePDF is a convenience method that combines availability check and downloading.
 func (s *PDFService) DownloadArticlePDF(pmid, filePath string) error {
 	available, err := s.IsPDFAvailable(pmid)
