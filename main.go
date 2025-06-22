@@ -20,7 +20,7 @@ func searchAction(c *cli.Context) error {
 		return cli.Exit(err.Error(), 1)
 	}
 
-	if len(esearchResult.IDList.IDs) == 0 {
+	if len(esearchResult.GetIDs()) == 0 {
 		slog.Info("No PubMed IDs found for the query.")
 		return nil
 	}
@@ -28,7 +28,7 @@ func searchAction(c *cli.Context) error {
 	slog.Info(
 		"Found articles",
 		"count", esearchResult.Count,
-		"retrieving", len(esearchResult.IDList.IDs),
+		"retrieving", len(esearchResult.GetIDs()),
 	)
 
 	articleSet, err := searchService.FetchPubMedDetails(
