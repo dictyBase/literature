@@ -2,46 +2,6 @@ package main
 
 import "encoding/xml"
 
-// OAResponse represents the top-level XML structure for the OA FTP service.
-type OAResponse struct {
-	XMLName xml.Name `xml:"OA"`
-	Records struct {
-		Records []OARecord `xml:"record"`
-	} `xml:"records"`
-}
-
-// OARecord contains information about a specific record, including download links.
-type OARecord struct {
-	XMLName xml.Name `xml:"record"`
-	ID      string   `xml:"id,attr"`
-	Links   []OALink `xml:"link"`
-}
-
-// OALink represents a download link for a specific format (e.g., pdf, tgz).
-type OALink struct {
-	XMLName xml.Name `xml:"link"`
-	Format  string   `xml:"format,attr"`
-	HREF    string   `xml:"href,attr"`
-}
-
-// ESearchResult represents the top-level XML structure for esearch.
-type ESearchResult struct {
-	XMLName  xml.Name `xml:"eSearchResult"`
-	Count    string   `xml:"Count"`
-	RetMax   string   `xml:"RetMax"`
-	RetStart string   `xml:"RetStart"`
-	QueryKey string   `xml:"QueryKey"`
-	WebEnv   string   `xml:"WebEnv"`
-	IDList   struct {
-		IDs []string `xml:"Id"`
-	} `xml:"IdList"`
-}
-
-// GetIDs returns the list of PubMed IDs from the search result.
-func (e *ESearchResult) GetIDs() []string {
-	return e.IDList.IDs
-}
-
 // PubMedArticleSet represents the top-level XML structure for efetch.
 type PubMedArticleSet struct {
 	XMLName        xml.Name        `xml:"PubmedArticleSet"`
@@ -58,13 +18,6 @@ type Author struct {
 type ArticleID struct {
 	IDType string `xml:"IdType,attr"`
 	Value  string `xml:",chardata"`
-}
-
-// PDFDownloadInfo contains information needed to download a PDF.
-type PDFDownloadInfo struct {
-	PMID    string
-	PMCID   string
-	PDFLink *OALink
 }
 
 // PubMedArticle represents a single PubMed article.
