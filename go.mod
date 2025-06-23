@@ -1,4 +1,4 @@
-module github.com/cybersiddhu/pubmed
+module github.com/cybersiddhu/literature
 
 go 1.23.8
 
