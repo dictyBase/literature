@@ -121,7 +121,7 @@ func (s *PDFService) findPDFDownloadInfo(
 
 	pmcArticleID, found := Find(
 		article.PubmedData.ArticleIdList.ArticleIDs,
-		isPMCID,
+		IsPMCID,
 	)
 	if !found {
 		return nil, &PDFError{
@@ -139,7 +139,7 @@ func (s *PDFService) findPDFDownloadInfo(
 		}
 	}
 
-	pdfLink, found := Find(oaRecord.Links, isPDFLink)
+	pdfLink, found := Find(oaRecord.Links, IsPDFLink)
 	if !found {
 		return nil, &PDFError{
 			PMID: pmid,
@@ -256,14 +256,4 @@ func (s *PDFService) DownloadArticlePDF(pmid, filePath string) error {
 	}
 
 	return s.DownloadPDF(filePath)
-}
-
-// isPMCID checks if an ArticleID is a PMC ID.
-func isPMCID(id ArticleID) bool {
-	return id.IDType == "pmc"
-}
-
-// isPDFLink checks if an OALink is a PDF download link.
-func isPDFLink(link OALink) bool {
-	return link.Format == "pdf"
 }
