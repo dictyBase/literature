@@ -1,4 +1,4 @@
-package main
+package literature
 
 // IsDOI checks if an ArticleID is a DOI.
 func IsDOI(id ArticleID) bool {

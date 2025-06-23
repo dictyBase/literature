@@ -1,4 +1,4 @@
-package main
+package literature
 
 func Map[T, U any](ts []T, f func(T) U) []U {
 	us := make([]U, len(ts))
