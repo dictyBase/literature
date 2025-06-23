@@ -1,6 +1,8 @@
 package main
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+)
 
 // PubMedArticleSet represents the top-level XML structure for efetch.
 type PubMedArticleSet struct {
@@ -103,7 +105,7 @@ func (p *PubMedArticle) GetArticleIDs() []ArticleID {
 
 // GetDOI returns the DOI if available.
 func (p *PubMedArticle) GetDOI() (string, bool) {
-	doiArticleID, found := Find(p.GetArticleIDs(), isDOI)
+	doiArticleID, found := Find(p.GetArticleIDs(), IsDOI)
 	if found {
 		return doiArticleID.Value, true
 	}
@@ -112,7 +114,7 @@ func (p *PubMedArticle) GetDOI() (string, bool) {
 
 // GetPMCID returns the PMC ID if available.
 func (p *PubMedArticle) GetPMCID() (string, bool) {
-	pmcArticleID, found := Find(p.GetArticleIDs(), isPMCID)
+	pmcArticleID, found := Find(p.GetArticleIDs(), IsPMCID)
 	if found {
 		return pmcArticleID.Value, true
 	}

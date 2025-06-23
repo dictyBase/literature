@@ -64,8 +64,3 @@ func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
 func formatAuthor(author Author) string {
 	return fmt.Sprintf("%s %s", author.ForeName, author.LastName)
 }
-
-// isDOI checks if an ArticleID is a DOI.
-func isDOI(id ArticleID) bool {
-	return id.IDType == "doi"
-}
