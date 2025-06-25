@@ -1,4 +1,4 @@
-module github.com/cybersiddhu/literature
+module github.com/dictybase/literature
 
 go 1.23.8
 
