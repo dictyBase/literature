@@ -15,6 +15,9 @@ const (
 	// ErrorTypePDFNotFound indicates the requested PDF was not found.
 	ErrorTypePDFNotFound ErrorType = "pdf_not_found"
 	
+	// ErrorTypePDFNotAvailable indicates the PDF is not available for this article.
+	ErrorTypePDFNotAvailable ErrorType = "pdf_not_available"
+	
 	// ErrorTypeNetworkError indicates a network-related error.
 	ErrorTypeNetworkError ErrorType = "network_error"
 	
