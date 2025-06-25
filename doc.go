@@ -6,7 +6,7 @@ and accessing PDFs through the NCBI eUtils interface.
 
 # Quick Start
 
-	import "github.com/cybersiddhu/literature"
+	import "github.com/dictybase/literature"
 
 	// Create a new client
 	client, err := literature.New()
