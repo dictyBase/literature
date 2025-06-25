@@ -1,4 +1,4 @@
-package literature
+package internal
 
 import (
 	"encoding/xml"
