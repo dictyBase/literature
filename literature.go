@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/dictybase/literature/internal"
 )
 
 // Client provides access to PubMed literature services.
 type Client struct {
-	articleService *articleService
-	searchService  *searchService
-	pdfService     *pdfService
+	articleService *internal.ArticleService
+	searchService  *internal.SearchService
+	pdfService     *internal.PDFService
 	httpClient     *http.Client
 	baseURL        string
 	userAgent      string
@@ -33,10 +35,19 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
-	// Initialize services
-	client.articleService = newArticleService(client.httpClient, client.baseURL)
-	client.searchService = newSearchService(client.httpClient, client.baseURL)
-	client.pdfService = newPDFService(client.httpClient, client.baseURL)
+	// Initialize services using internal constructors with appropriate options
+	var pdfOpts []internal.PDFServiceOption
+	var searchOpts []internal.SearchServiceOption
+	
+	// Pass HTTP client to internal services if configured
+	if client.httpClient != nil {
+		pdfOpts = append(pdfOpts, internal.WithHTTPClient(client.httpClient))
+		searchOpts = append(searchOpts, internal.WithSearchHTTPClient(client.httpClient))
+	}
+	
+	client.articleService = internal.NewArticleService()
+	client.searchService = internal.NewSearchService(searchOpts...)
+	client.pdfService = internal.NewPDFService(pdfOpts...)
 
 	return client, nil
 }
@@ -50,12 +61,12 @@ func (c *Client) GetArticle(pmid string) (*Article, error) {
 		}
 	}
 
-	internalArticle, err := c.articleService.fetchArticle(pmid)
+	internalArticle, err := c.articleService.FetchArticle(pmid)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertToPublicArticle(internalArticle), nil
+	return convertFromInternalArticle(internalArticle), nil
 }
 
 // GetArticles retrieves metadata for multiple PMIDs.
@@ -97,12 +108,12 @@ func (c *Client) Search(query string, opts ...SearchOption) (*SearchResult, erro
 		opt(config)
 	}
 
-	internalResult, err := c.searchService.search(query, config.limit, config.offset)
+	searchResult, err := c.searchService.SearchPubMed(query)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertToPublicSearchResult(internalResult, query), nil
+	return convertFromInternalSearchResult(searchResult, query, config.limit, config.offset), nil
 }
 
 // FindSimilar finds articles similar to the given PMID.
@@ -137,12 +148,27 @@ func (c *Client) GetPDF(pmid string) (*PDF, error) {
 		}
 	}
 
-	internalPDF, err := c.pdfService.getPDF(pmid)
+	available, err := c.pdfService.IsPDFAvailable(pmid)
 	if err != nil {
 		return nil, err
 	}
-
-	return convertToPublicPDF(internalPDF), nil
+	
+	if !available {
+		return nil, &Error{
+			Type:    ErrorTypePDFNotAvailable,
+			Message: "PDF not available for this article",
+		}
+	}
+	
+	url, err := c.pdfService.GetPDFURL()
+	if err != nil {
+		return nil, err
+	}
+	
+	return &PDF{
+		PMID: pmid,
+		URL:  url,
+	}, nil
 }
 
 // HasPDF checks if a PDF is available for the given PMID.
@@ -154,5 +180,5 @@ func (c *Client) HasPDF(pmid string) (bool, error) {
 		}
 	}
 
-	return c.pdfService.hasPDF(pmid)
+	return c.pdfService.IsPDFAvailable(pmid)
 }
