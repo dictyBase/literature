@@ -6,19 +6,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cybersiddhu/literature"
+	"github.com/dictybase/literature"
 )
 
 func main() {
 	// Example 1: Create client with custom configuration
 	fmt.Println("=== Advanced Client Configuration ===")
-	
+
 	customHTTPClient := &http.Client{
 		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        10,
-			IdleConnTimeout:     30 * time.Second,
-			DisableCompression:  false,
+			MaxIdleConns:       10,
+			IdleConnTimeout:    30 * time.Second,
+			DisableCompression: false,
 		},
 	}
 
@@ -34,7 +34,7 @@ func main() {
 	// Example 2: Batch article fetching
 	fmt.Println("\n=== Batch Article Fetching ===")
 	pmids := []string{"33515252", "33515253", "33515254"} // Replace with real PMIDs
-	
+
 	articles, err := client.GetArticles(pmids)
 	if err != nil {
 		log.Printf("Error fetching articles: %v", err)
@@ -47,7 +47,7 @@ func main() {
 
 	// Example 3: Advanced search with pagination
 	fmt.Println("\n=== Advanced Search with Pagination ===")
-	
+
 	// First page
 	firstPage, err := client.Search("machine learning genomics",
 		literature.WithLimit(5),
@@ -96,7 +96,7 @@ func main() {
 			if litErr.PMID != "" {
 				fmt.Printf("Related PMID: %s\n", litErr.PMID)
 			}
-			
+
 			// Check specific error types
 			if litErr.IsType(literature.ErrorTypeInvalidInput) {
 				fmt.Println("This was an invalid input error")
@@ -127,7 +127,7 @@ func main() {
 	}
 
 	results := make(chan result, len(pmids))
-	
+
 	// Start concurrent fetches
 	for _, pmid := range pmids {
 		go func(id string) {
@@ -147,6 +147,6 @@ func main() {
 			successCount++
 		}
 	}
-	
+
 	fmt.Printf("Concurrent fetch completed: %d/%d successful\n", successCount, len(pmids))
 }

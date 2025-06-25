@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cybersiddhu/literature"
+	"github.com/dictybase/literature"
 )
 
 func main() {

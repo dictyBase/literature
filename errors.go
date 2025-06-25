@@ -8,39 +8,39 @@ type ErrorType string
 const (
 	// ErrorTypeInvalidInput indicates invalid input parameters.
 	ErrorTypeInvalidInput ErrorType = "invalid_input"
-	
+
 	// ErrorTypeArticleNotFound indicates the requested article was not found.
 	ErrorTypeArticleNotFound ErrorType = "article_not_found"
-	
+
 	// ErrorTypePDFNotFound indicates the requested PDF was not found.
 	ErrorTypePDFNotFound ErrorType = "pdf_not_found"
-	
+
 	// ErrorTypePDFNotAvailable indicates the PDF is not available for this article.
 	ErrorTypePDFNotAvailable ErrorType = "pdf_not_available"
-	
+
 	// ErrorTypeNetworkError indicates a network-related error.
 	ErrorTypeNetworkError ErrorType = "network_error"
-	
+
 	// ErrorTypeParseError indicates an error parsing the API response.
 	ErrorTypeParseError ErrorType = "parse_error"
-	
+
 	// ErrorTypeAPIError indicates an error from the PubMed API.
 	ErrorTypeAPIError ErrorType = "api_error"
-	
+
 	// ErrorTypeTimeout indicates a request timeout.
 	ErrorTypeTimeout ErrorType = "timeout"
-	
+
 	// ErrorTypeRateLimit indicates rate limiting by the API.
 	ErrorTypeRateLimit ErrorType = "rate_limit"
 )
 
 // Error represents a literature client error with structured information.
 type Error struct {
-	Type     ErrorType `json:"type"`
-	Message  string    `json:"message"`
-	PMID     string    `json:"pmid,omitempty"`
-	Query    string    `json:"query,omitempty"`
-	Cause    error     `json:"-"`
+	Type    ErrorType `json:"type"`
+	Message string    `json:"message"`
+	PMID    string    `json:"pmid,omitempty"`
+	Query   string    `json:"query,omitempty"`
+	Cause   error     `json:"-"`
 }
 
 // Error implements the error interface.
