@@ -15,6 +15,7 @@ type SearchService struct {
 	esearchURL string
 	efetchURL  string
 	retmax     int
+	retstart   int
 }
 
 // SearchServiceOption configures SearchService behavior.
@@ -27,10 +28,11 @@ func WithSearchHTTPClient(client *http.Client) SearchServiceOption {
 	}
 }
 
-// WithRetmax sets the maximum number of results to return (default: 10).
-func WithRetmax(retmax int) SearchServiceOption {
+// WithRetrieval sets the maximum number of results and the starting index.
+func WithRetrieval(retmax, retstart int) SearchServiceOption {
 	return func(s *SearchService) {
 		s.retmax = retmax
+		s.retstart = retstart
 		s.buildURLs()
 	}
 }
@@ -41,6 +43,7 @@ func NewSearchService(options ...SearchServiceOption) *SearchService {
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
 		retmax:     10, // default value
+		retstart:   0,  // default value
 	}
 
 	service.buildURLs()
@@ -55,19 +58,27 @@ func NewSearchService(options ...SearchServiceOption) *SearchService {
 // rebuildURLs rebuilds the esearch and efetch URLs with the current retmax value.
 func (s *SearchService) buildURLs() {
 	s.esearchURL = fmt.Sprintf(
-		"%s/esearch.fcgi?db=pubmed&retmax=%d&retmode=xml&usehistory=y",
+		"%s/esearch.fcgi?db=pubmed&retmax=%d&retstart=%d&retmode=xml&usehistory=y",
 		s.baseURL,
 		s.retmax,
+		s.retstart,
 	)
 	s.efetchURL = fmt.Sprintf(
-		"%s/efetch.fcgi?db=pubmed&retmode=xml&retmax=%d",
+		"%s/efetch.fcgi?db=pubmed&retmode=xml&retmax=%d&retstart=%d",
 		s.baseURL,
 		s.retmax,
+		s.retstart,
 	)
 }
 
 // SearchPubMed performs a search query against PubMed and returns search results.
-func (s *SearchService) SearchPubMed(query string) (*ESearchResult, error) {
+func (s *SearchService) SearchPubMed(
+	query string,
+	limit, offset int,
+) (*ESearchResult, error) {
+	s.retmax = limit
+	s.retstart = offset
+	s.buildURLs()
 	esearchURL := fmt.Sprintf(
 		"%s&term=%s",
 		s.esearchURL,
