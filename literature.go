@@ -86,10 +86,10 @@ func (c *Client) fetchArticleWithError(pmid string) (*Article, error) {
 
 // GetArticles retrieves metadata for multiple PMIDs.
 func (c *Client) GetArticles(pmids []string) ([]*Article, error) {
-	if len(pmids) == 0 {
+	if err := c.validate.Var(pmids, "required,min=1,dive,required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "PMIDs list cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
