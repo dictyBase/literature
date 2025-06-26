@@ -59,3 +59,21 @@ func MapWithError[T, U any](ts []T, f func(T) (U, error)) ([]U, error) {
 	}
 	return us, nil
 }
+
+// Partition splits a slice into chunks of a specified size.
+func Partition[T any](slice []T, size int) [][]T {
+	if size <= 0 {
+		panic("partition size must be positive")
+	}
+
+	var chunks [][]T
+	for i := 0; i < len(slice); i += size {
+		end := i + size
+		if end > len(slice) {
+			end = len(slice)
+		}
+		chunks = append(chunks, slice[i:end])
+	}
+
+	return chunks
+}
