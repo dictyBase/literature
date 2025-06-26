@@ -38,13 +38,13 @@ func New(opts ...Option) (*Client, error) {
 	// Initialize services using internal constructors with appropriate options
 	var pdfOpts []internal.PDFServiceOption
 	var searchOpts []internal.SearchServiceOption
-	
+
 	// Pass HTTP client to internal services if configured
 	if client.httpClient != nil {
 		pdfOpts = append(pdfOpts, internal.WithHTTPClient(client.httpClient))
 		searchOpts = append(searchOpts, internal.WithSearchHTTPClient(client.httpClient))
 	}
-	
+
 	client.articleService = internal.NewArticleService()
 	client.searchService = internal.NewSearchService(searchOpts...)
 	client.pdfService = internal.NewPDFService(pdfOpts...)
@@ -113,7 +113,13 @@ func (c *Client) Search(query string, opts ...SearchOption) (*SearchResult, erro
 		return nil, err
 	}
 
-	return convertFromInternalSearchResult(searchResult, query, config.limit, config.offset), nil
+	// Fetch detailed article information using WebEnv and QueryKey
+	articleSet, err := c.searchService.FetchPubMedDetails(searchResult.WebEnv, searchResult.QueryKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFromInternalSearchResultWithArticles(searchResult, articleSet, query, config.limit, config.offset), nil
 }
 
 // FindSimilar finds articles similar to the given PMID.
@@ -152,19 +158,19 @@ func (c *Client) GetPDF(pmid string) (*PDF, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !available {
 		return nil, &Error{
 			Type:    ErrorTypePDFNotAvailable,
 			Message: "PDF not available for this article",
 		}
 	}
-	
+
 	url, err := c.pdfService.GetPDFURL()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &PDF{
 		PMID: pmid,
 		URL:  url,

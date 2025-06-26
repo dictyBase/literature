@@ -29,7 +29,9 @@ func convertFromInternalArticle(internal *internal.PubMedArticle) *Article {
 		article.Authors = append(article.Authors, Author{
 			FirstName: author.ForeName,
 			LastName:  author.LastName,
-			FullName:  strings.TrimSpace(fmt.Sprintf("%s %s", author.ForeName, author.LastName)),
+			FullName: strings.TrimSpace(
+				fmt.Sprintf("%s %s", author.ForeName, author.LastName),
+			),
 		})
 	}
 
@@ -37,7 +39,11 @@ func convertFromInternalArticle(internal *internal.PubMedArticle) *Article {
 }
 
 // convertFromInternalSearchResult converts internal.ESearchResult to public SearchResult
-func convertFromInternalSearchResult(internal *internal.ESearchResult, query string, limit, offset int) *SearchResult {
+func convertFromInternalSearchResult(
+	internal *internal.ESearchResult,
+	query string,
+	limit, offset int,
+) *SearchResult {
 	total := 0
 	if internal.Count != "" {
 		if count, err := strconv.Atoi(internal.Count); err == nil {
@@ -51,5 +57,36 @@ func convertFromInternalSearchResult(internal *internal.ESearchResult, query str
 		Limit:    limit,
 		Offset:   offset,
 		Articles: []*Article{}, // Would be populated by fetching each PMID if needed
+	}
+}
+
+// convertFromInternalSearchResultWithArticles converts internal search results with detailed article information
+func convertFromInternalSearchResultWithArticles(
+	searchResult *internal.ESearchResult,
+	articleSet *internal.PubMedArticleSet,
+	query string,
+	limit, offset int,
+) *SearchResult {
+	total := 0
+	if searchResult.Count != "" {
+		if count, err := strconv.Atoi(searchResult.Count); err == nil {
+			total = count
+		}
+	}
+
+	articles := make([]*Article, 0, len(articleSet.PubMedArticles))
+	for _, internalArticle := range articleSet.PubMedArticles {
+		articles = append(
+			articles,
+			convertFromInternalArticle(&internalArticle),
+		)
+	}
+
+	return &SearchResult{
+		Query:    query,
+		Total:    total,
+		Limit:    limit,
+		Offset:   offset,
+		Articles: articles,
 	}
 }
