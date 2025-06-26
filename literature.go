@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dictybase/literature/internal"
+	"github.com/go-playground/validator/v10"
 )
 
 // Client provides access to PubMed literature services.
@@ -18,6 +19,7 @@ type Client struct {
 	httpClient     *http.Client
 	baseURL        string
 	userAgent      string
+	validate       *validator.Validate
 }
 
 // New creates a new literature client with the provided options.
@@ -26,6 +28,7 @@ func New(opts ...Option) (*Client, error) {
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
 		userAgent:  "literature-go-client/1.0",
+		validate:   validator.New(),
 	}
 
 	// Apply options
@@ -57,10 +60,10 @@ func New(opts ...Option) (*Client, error) {
 
 // GetArticle retrieves article metadata for the given PMID.
 func (c *Client) GetArticle(pmid string) (*Article, error) {
-	if pmid == "" {
+	if err := c.validate.Var(pmid, "required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "PMID cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
@@ -98,13 +101,12 @@ func (c *Client) Search(
 	query string,
 	opts ...SearchOption,
 ) (*SearchResult, error) {
-	if query == "" {
+	if err := c.validate.Var(query, "required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "search query cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
-
 	config := &searchConfig{
 		limit:  20,
 		offset: 0,
@@ -146,10 +148,10 @@ func (c *Client) FindSimilar(
 	pmid string,
 	opts ...SearchOption,
 ) (*SearchResult, error) {
-	if pmid == "" {
+	if err := c.validate.Var(pmid, "required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "PMID cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
@@ -169,10 +171,10 @@ func (c *Client) FindSimilar(
 
 // GetPDF retrieves PDF information for the given PMID.
 func (c *Client) GetPDF(pmid string) (*PDF, error) {
-	if pmid == "" {
+	if err := c.validate.Var(pmid, "required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "PMID cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
@@ -201,10 +203,10 @@ func (c *Client) GetPDF(pmid string) (*PDF, error) {
 
 // HasPDF checks if a PDF is available for the given PMID.
 func (c *Client) HasPDF(pmid string) (bool, error) {
-	if pmid == "" {
+	if err := c.validate.Var(pmid, "required"); err != nil {
 		return false, &Error{
 			Type:    ErrorTypeInvalidInput,
-			Message: "PMID cannot be empty",
+			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
