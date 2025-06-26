@@ -10,9 +10,10 @@
 - **Code Style Guidelines**
     - Imports: Standard library first, then external packages, then internal packages
     - Prefer functional programming utilities from collection package where appropriate
-    - Use options pattern for configurable components (see SQLiteVectorStore)
+    - Use options pattern for configurable components.
     - Document all exported functions, types, and constants with proper Go doc comments
     - Test coverage should be comprehensive with both unit and integration tests
+    - Any function or method receiving more than three parameters should use a type struct
 
 - **Project Structure**
     - Primary interface definitions in package root
@@ -38,12 +39,14 @@
     - Do not use Go keywords as variable names.
 
 - **Constants:**
-    - Use `PascalCase` for constants. If a constant is unscoped, all letters in the constant should be capitalized. `const MAX_SIZE = 100`
+    - Use `PascalCase` for constants. If a constant is unscoped, all letters in
+    the constant should be capitalized. `const MAX_SIZE = 100`
 
 - **Error Handling:**
     - When naming error variables, use `err` as the prefix:  `errMyCustomError`.
     - Always check errors and return meaningful wrapped errors
 
 - **Receivers:**
-    - Use short, one or two-letter receiver names that reflect the type (e.g., `r` for `io.Reader`, `f` for `*File`).
+    - Use short, one or two-letter receiver names that reflect the type (e.g.,
+    `r` for `io.Reader`, `f` for `*File`).
 
