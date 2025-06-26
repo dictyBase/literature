@@ -72,6 +72,15 @@ func (c *Client) GetArticle(pmid string) (*Article, error) {
 	return convertFromInternalArticle(internalArticle), nil
 }
 
+// fetchArticleWithError is a helper function that wraps GetArticle for functional composition
+func (c *Client) fetchArticleWithError(pmid string) (*Article, error) {
+	article, err := c.GetArticle(pmid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch article %s: %w", pmid, err)
+	}
+	return article, nil
+}
+
 // GetArticles retrieves metadata for multiple PMIDs.
 func (c *Client) GetArticles(pmids []string) ([]*Article, error) {
 	if len(pmids) == 0 {
@@ -81,16 +90,7 @@ func (c *Client) GetArticles(pmids []string) ([]*Article, error) {
 		}
 	}
 
-	articles := make([]*Article, 0, len(pmids))
-	for _, pmid := range pmids {
-		article, err := c.GetArticle(pmid)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch article %s: %w", pmid, err)
-		}
-		articles = append(articles, article)
-	}
-
-	return articles, nil
+	return internal.MapWithError(pmids, c.fetchArticleWithError)
 }
 
 // Search performs a literature search with the given query.
