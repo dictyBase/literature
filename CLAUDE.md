@@ -38,22 +38,59 @@
             }
             return nil, false
         }
+        
+        func MapWithError[T, U any](ts []T, f func(T) (U, error)) ([]U, error) {
+            us := make([]U, len(ts))
+            for i, t := range ts {
+                u, err := f(t)
+                if err != nil {
+                    return nil, err
+                }
+                us[i] = u
+            }
+            return us, nil
+        }
         ```
       - Usage examples:
         ```go
+        // Helper functions for transformations
+        func stringToInt(s string) int {
+            n, _ := strconv.Atoi(s)
+            return n
+        }
+        
+        func isEven(n int) bool {
+            return n%2 == 0
+        }
+        
+        func isBob(u string) bool {
+            return u == "bob"
+        }
+        
         // Transform slice elements
         strings := []string{"1", "2", "3"}
-        numbers := Map(strings, func(s string) int { 
-            n, _ := strconv.Atoi(s); return n 
-        })
+        numbers := Map(strings, stringToInt)
         
         // Filter slice elements
         numbers := []int{1, 2, 3, 4, 5}
-        evens := Filter(numbers, func(n int) bool { return n%2 == 0 })
+        evens := Filter(numbers, isEven)
         
         // Find first matching element
         users := []string{"alice", "bob", "charlie"}
-        user, found := Find(users, func(u string) bool { return u == "bob" })
+        user, found := Find(users, isBob)
+        
+        // For complex operations with error handling
+        func (c *Client) processArticleWithError(pmid string) (*Article, error) {
+            article, err := c.GetArticle(pmid)
+            if err != nil {
+                return nil, fmt.Errorf("failed to process article %s: %w", pmid, err)
+            }
+            return article, nil
+        }
+        
+        // Usage with MapWithError
+        pmids := []string{"12345", "67890", "11111"}
+        articles, err := MapWithError(pmids, c.processArticleWithError)
         ```
     - Use options pattern for configurable components
       ```go
