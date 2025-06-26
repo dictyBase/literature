@@ -114,7 +114,11 @@ func (c *Client) Search(
 		opt(config)
 	}
 
-	searchResult, err := c.searchService.SearchPubMed(query)
+	searchResult, err := c.searchService.SearchPubMed(
+		query,
+		config.limit,
+		config.offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +163,7 @@ func (c *Client) FindSimilar(
 	}
 
 	// Use PubMed's "similar articles" query
-	query := fmt.Sprintf("similar_articles[PMID]:%s", pmid)
+	query := fmt.Sprintf("pubmed_similar[PMID]:%s", pmid)
 	return c.Search(query, WithLimit(config.limit), WithOffset(config.offset))
 }
 
