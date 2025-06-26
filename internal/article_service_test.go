@@ -1,4 +1,4 @@
-package literature
+package internal
 
 import (
 	"fmt"
@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestArticleService(handler http.HandlerFunc) (*ArticleService, *httptest.Server) {
+func newTestArticleService(
+	handler http.HandlerFunc,
+) (*ArticleService, *httptest.Server) {
 	server := httptest.NewServer(handler)
 	service := &ArticleService{
 		httpClient: server.Client(),

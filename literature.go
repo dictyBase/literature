@@ -42,7 +42,10 @@ func New(opts ...Option) (*Client, error) {
 	// Pass HTTP client to internal services if configured
 	if client.httpClient != nil {
 		pdfOpts = append(pdfOpts, internal.WithHTTPClient(client.httpClient))
-		searchOpts = append(searchOpts, internal.WithSearchHTTPClient(client.httpClient))
+		searchOpts = append(
+			searchOpts,
+			internal.WithSearchHTTPClient(client.httpClient),
+		)
 	}
 
 	client.articleService = internal.NewArticleService()
@@ -91,7 +94,10 @@ func (c *Client) GetArticles(pmids []string) ([]*Article, error) {
 }
 
 // Search performs a literature search with the given query.
-func (c *Client) Search(query string, opts ...SearchOption) (*SearchResult, error) {
+func (c *Client) Search(
+	query string,
+	opts ...SearchOption,
+) (*SearchResult, error) {
 	if query == "" {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
@@ -114,16 +120,28 @@ func (c *Client) Search(query string, opts ...SearchOption) (*SearchResult, erro
 	}
 
 	// Fetch detailed article information using WebEnv and QueryKey
-	articleSet, err := c.searchService.FetchPubMedDetails(searchResult.WebEnv, searchResult.QueryKey)
+	articleSet, err := c.searchService.FetchPubMedDetails(
+		searchResult.WebEnv,
+		searchResult.QueryKey,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertFromInternalSearchResultWithArticles(searchResult, articleSet, query, config.limit, config.offset), nil
+	return convertFromInternalSearchResultWithArticles(
+		searchResult,
+		articleSet,
+		query,
+		config.limit,
+		config.offset,
+	), nil
 }
 
 // FindSimilar finds articles similar to the given PMID.
-func (c *Client) FindSimilar(pmid string, opts ...SearchOption) (*SearchResult, error) {
+func (c *Client) FindSimilar(
+	pmid string,
+	opts ...SearchOption,
+) (*SearchResult, error) {
 	if pmid == "" {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
