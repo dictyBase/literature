@@ -61,12 +61,12 @@ func main() {
   - [Examples](#examples)
 - [Types and Data Structures](#types-and-data-structures)
 - [Error Handling](#error-handling-1)
-- [Project Structure](#project-structure)
 - [Thread Safety](#thread-safety)
 - [Rate Limiting](#rate-limiting)
 - [Utility Functions](#utility-functions)
 - [Contributing](#contributing)
 - [Development](#development)
+  - [Project Structure](#project-structure)
 - [License](#license)
 - [Support](#support)
 
@@ -278,34 +278,22 @@ if err != nil {
 }
 ```
 
-## Project Structure
-
-```
-literature/
-├── doc.go              # Package documentation
-├── literature.go       # Main client interface
-├── types.go           # Public data structures
-├── options.go         # Configuration options
-├── errors.go          # Error types and handling
-├── adapters.go        # Internal service adapters
-├── internal/          # Private implementation details
-├── examples/          # Usage examples
-├── testdata/          # Test fixtures
-└── cmd/pubmed/        # CLI tool (optional)
-```
-
 
 ## Thread Safety
 
-The client is safe for concurrent use across multiple goroutines. All methods can be called from different goroutines simultaneously.
+The client is safe for concurrent use across multiple goroutines. All methods
+can be called from different goroutines simultaneously.
 
 ## Rate Limiting
 
-Please be mindful of NCBI's usage guidelines and rate limits. The library currently does not implement automatic rate limiting, but future versions may include this feature.
+Please be mindful of NCBI's usage guidelines and rate limits. The library
+currently does not implement automatic rate limiting, but future versions may
+include this feature.
 
 ## Utility Functions
 
-The library includes generic utility functions for functional programming operations:
+The library includes generic utility functions for functional programming
+operations:
 
 ### Find
 
@@ -343,6 +331,22 @@ Filters a slice using the provided predicate.
 
 ## Development
 
+### Project Structure
+
+```
+literature/
+├── doc.go              # Package documentation
+├── literature.go       # Main client interface
+├── types.go           # Public data structures
+├── options.go         # Configuration options
+├── errors.go          # Error types and handling
+├── adapters.go        # Internal service adapters
+├── internal/          # Private implementation details
+├── examples/          # Usage examples
+├── testdata/          # Test fixtures
+└── cmd/pubmed/        # CLI tool (optional)
+```
+
 ### Build and Format
 
 ```bash
@@ -360,7 +364,7 @@ go build
 
 ### Testing
 
-Run tests with the provided commands:
+Quick test commands:
 
 ```bash
 # Run all tests
@@ -372,6 +376,8 @@ gotestsum --format-hide-empty-pkg --format testdox --format-icons hivis -- -run 
 # Run with verbose output
 gotestsum --format-hide-empty-pkg --format standard-verbose --format-icons hivis
 ```
+
+For comprehensive testing guidelines, practices, and advanced usage, see [TESTING.md](TESTING.md).
 
 ## License
 
