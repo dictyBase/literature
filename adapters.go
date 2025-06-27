@@ -8,9 +8,7 @@ import (
 	"github.com/dictybase/literature/internal"
 )
 
-// Conversion functions to transform internal types to public API types
-
-// convertFromInternalArticle converts internal.PubMedArticle to public Article
+// convertFromInternalArticle converts internal.PubMedArticle to public Article.
 func convertFromInternalArticle(internal *internal.PubMedArticle) *Article {
 	article := &Article{
 		PMID:     internal.GetPMID(),

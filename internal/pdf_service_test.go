@@ -18,15 +18,18 @@ const (
 	oaPath     = "/oa.fcgi"
 )
 
-// mockAPIHandler returns a handler that serves mock XML responses for different endpoints.
+// mockAPIHandler returns a handler that serves mock XML responses for different
+// endpoints.
 func mockAPIHandler() http.Handler {
 	mux := http.NewServeMux()
 
 	// Mock for ArticleService efetch
-	mux.HandleFunc(efetchPath, func(writer http.ResponseWriter, request *http.Request) {
-		pmid := request.URL.Query().Get("id")
-		if pmid == testPMID {
-			fmt.Fprintf(writer, `
+	mux.HandleFunc(
+		efetchPath,
+		func(writer http.ResponseWriter, request *http.Request) {
+			pmid := request.URL.Query().Get("id")
+			if pmid == testPMID {
+				fmt.Fprintf(writer, `
 <PubmedArticleSet>
     <PubmedArticle>
         <MedlineCitation>
@@ -39,16 +42,19 @@ func mockAPIHandler() http.Handler {
         </PubmedData>
     </PubmedArticle>
 </PubmedArticleSet>`, testPMID, testPMCID)
-		} else {
-			http.NotFound(writer, request)
-		}
-	})
+			} else {
+				http.NotFound(writer, request)
+			}
+		},
+	)
 
 	// Mock for PDFService OA fetch
-	mux.HandleFunc(oaPath, func(writer http.ResponseWriter, request *http.Request) {
-		id := request.URL.Query().Get("id")
-		if id == testPMCID {
-			fmt.Fprintf(writer, `
+	mux.HandleFunc(
+		oaPath,
+		func(writer http.ResponseWriter, request *http.Request) {
+			id := request.URL.Query().Get("id")
+			if id == testPMCID {
+				fmt.Fprintf(writer, `
 <OA>
     <records>
         <record id="%s">
@@ -56,15 +62,17 @@ func mockAPIHandler() http.Handler {
         </record>
     </records>
 </OA>`, testPMCID, testPDFURL)
-		} else {
-			http.NotFound(writer, request)
-		}
-	})
+			} else {
+				http.NotFound(writer, request)
+			}
+		},
+	)
 
 	return mux
 }
 
-// newTestPDFService creates a PDFService configured for testing with a mock server.
+// newTestPDFService creates a PDFService configured for testing with a mock
+// server.
 func newTestPDFService(handler http.Handler) (*PDFService, *httptest.Server) {
 	server := httptest.NewServer(handler)
 	client := server.Client()
@@ -77,7 +85,6 @@ func newTestPDFService(handler http.Handler) (*PDFService, *httptest.Server) {
 	return service, server
 }
 
-// TestNewPDFService from plan
 func TestNewPDFService(t *testing.T) {
 	req := require.New(t)
 	service := NewPDFService()
@@ -89,7 +96,6 @@ func TestNewPDFService(t *testing.T) {
 	req.Equal("https://www.ncbi.nlm.nih.gov/pmc/utils/oa", service.oaBaseURL)
 }
 
-// TestWithHTTPClient from plan
 func TestWithHTTPClient(t *testing.T) {
 	req := require.New(t)
 	customClient := &http.Client{Timeout: 10 * time.Second}
@@ -99,7 +105,6 @@ func TestWithHTTPClient(t *testing.T) {
 	req.Equal(customClient, service.articleService.httpClient)
 }
 
-// TestStateManagement covers clearState and GetCurrentPMID from plan
 func TestStateManagement(t *testing.T) {
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
@@ -122,7 +127,6 @@ func TestStateManagement(t *testing.T) {
 	req.Nil(service.downloadInfo)
 }
 
-// TestIsPDFAvailable_Success from plan
 func TestIsPDFAvailable_Success(t *testing.T) {
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
@@ -143,7 +147,6 @@ func TestIsPDFAvailable_Success(t *testing.T) {
 	req.Equal(testPDFURL, service.downloadInfo.PDFLink.HREF)
 }
 
-// TestFetchOADetails_Success from plan
 func TestFetchOADetails_Success(t *testing.T) {
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
@@ -159,7 +162,6 @@ func TestFetchOADetails_Success(t *testing.T) {
 	req.Equal(testPDFURL, oaRecord.Links[0].HREF)
 }
 
-// TestFindPDFDownloadInfo_Success from plan
 func TestFindPDFDownloadInfo_Success(t *testing.T) {
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
@@ -175,7 +177,6 @@ func TestFindPDFDownloadInfo_Success(t *testing.T) {
 	req.Equal(testPDFURL, info.PDFLink.HREF)
 }
 
-// TestGetPDFURL_Success from plan
 func TestGetPDFURL_Success(t *testing.T) {
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
@@ -191,7 +192,6 @@ func TestGetPDFURL_Success(t *testing.T) {
 	req.Equal(testPDFURL, pdfURL)
 }
 
-// TestIsPMCID from plan
 func TestIsPMCID(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -217,7 +217,6 @@ func TestIsPMCID(t *testing.T) {
 	}
 }
 
-// TestIsPDFLink from plan
 func TestIsPDFLink(t *testing.T) {
 	testCases := []struct {
 		name     string
