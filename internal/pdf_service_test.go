@@ -86,6 +86,7 @@ func newTestPDFService(handler http.Handler) (*PDFService, *httptest.Server) {
 }
 
 func TestNewPDFService(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service := NewPDFService()
 
@@ -97,6 +98,7 @@ func TestNewPDFService(t *testing.T) {
 }
 
 func TestWithHTTPClient(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	customClient := &http.Client{Timeout: 10 * time.Second}
 	service := NewPDFService(WithHTTPClient(customClient))
@@ -106,6 +108,7 @@ func TestWithHTTPClient(t *testing.T) {
 }
 
 func TestStateManagement(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
 	defer server.Close()
@@ -128,6 +131,7 @@ func TestStateManagement(t *testing.T) {
 }
 
 func TestIsPDFAvailable_Success(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
 	defer server.Close()
@@ -148,6 +152,7 @@ func TestIsPDFAvailable_Success(t *testing.T) {
 }
 
 func TestFetchOADetails_Success(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
 	defer server.Close()
@@ -163,6 +168,7 @@ func TestFetchOADetails_Success(t *testing.T) {
 }
 
 func TestFindPDFDownloadInfo_Success(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
 	defer server.Close()
@@ -178,6 +184,7 @@ func TestFindPDFDownloadInfo_Success(t *testing.T) {
 }
 
 func TestGetPDFURL_Success(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service, server := newTestPDFService(mockAPIHandler())
 	defer server.Close()
@@ -193,6 +200,7 @@ func TestGetPDFURL_Success(t *testing.T) {
 }
 
 func TestIsPMCID(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name     string
 		id       ArticleID
@@ -208,16 +216,19 @@ func TestIsPMCID(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			req := require.New(t)
-			result := IsPMCID(tc.id)
-			req.Equal(tc.expected, result)
+			result := IsPMCID(testCase.id)
+			req.Equal(testCase.expected, result)
 		})
 	}
 }
 
 func TestIsPDFLink(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name     string
 		link     OALink
@@ -233,11 +244,13 @@ func TestIsPDFLink(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			req := require.New(t)
-			result := IsPDFLink(tc.link)
-			req.Equal(tc.expected, result)
+			result := IsPDFLink(testCase.link)
+			req.Equal(testCase.expected, result)
 		})
 	}
 }
