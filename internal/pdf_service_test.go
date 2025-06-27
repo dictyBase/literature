@@ -23,10 +23,10 @@ func mockAPIHandler() http.Handler {
 	mux := http.NewServeMux()
 
 	// Mock for ArticleService efetch
-	mux.HandleFunc(efetchPath, func(w http.ResponseWriter, r *http.Request) {
-		pmid := r.URL.Query().Get("id")
+	mux.HandleFunc(efetchPath, func(writer http.ResponseWriter, request *http.Request) {
+		pmid := request.URL.Query().Get("id")
 		if pmid == testPMID {
-			fmt.Fprintf(w, `
+			fmt.Fprintf(writer, `
 <PubmedArticleSet>
     <PubmedArticle>
         <MedlineCitation>
@@ -40,15 +40,15 @@ func mockAPIHandler() http.Handler {
     </PubmedArticle>
 </PubmedArticleSet>`, testPMID, testPMCID)
 		} else {
-			http.NotFound(w, r)
+			http.NotFound(writer, request)
 		}
 	})
 
 	// Mock for PDFService OA fetch
-	mux.HandleFunc(oaPath, func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Query().Get("id")
+	mux.HandleFunc(oaPath, func(writer http.ResponseWriter, request *http.Request) {
+		id := request.URL.Query().Get("id")
 		if id == testPMCID {
-			fmt.Fprintf(w, `
+			fmt.Fprintf(writer, `
 <OA>
     <records>
         <record id="%s">
@@ -57,7 +57,7 @@ func mockAPIHandler() http.Handler {
     </records>
 </OA>`, testPMCID, testPDFURL)
 		} else {
-			http.NotFound(w, r)
+			http.NotFound(writer, request)
 		}
 	})
 
