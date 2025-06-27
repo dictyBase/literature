@@ -47,7 +47,7 @@ func CurriedFilter[T any](predicate func(T) bool) func([]T) []T {
 	}
 }
 
-// MapWithError applies a function that can return an error to each element
+// MapWithError applies a function that can return an error to each element.
 func MapWithError[T, U any](source []T, f func(T) (U, error)) ([]U, error) {
 	result := make([]U, len(source))
 	for i, item := range source {
