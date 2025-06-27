@@ -63,7 +63,6 @@ func main() {
 - [Error Handling](#error-handling-1)
 - [Thread Safety](#thread-safety)
 - [Rate Limiting](#rate-limiting)
-- [Utility Functions](#utility-functions)
 - [Contributing](#contributing)
 - [Development](#development)
   - [Project Structure](#project-structure)
@@ -290,34 +289,6 @@ Please be mindful of NCBI's usage guidelines and rate limits. The library
 currently does not implement automatic rate limiting, but future versions may
 include this feature.
 
-## Utility Functions
-
-The library includes generic utility functions for functional programming
-operations:
-
-### Find
-
-```go
-func Find[T any](slice []T, predicate func(T) bool) (*T, bool)
-```
-
-Finds the first element in a slice matching the predicate.
-
-### Map
-
-```go
-func Map[T, U any](ts []T, f func(T) U) []U
-```
-
-Transforms a slice using the provided function.
-
-### Filter
-
-```go
-func Filter[T any](slice []T, predicate func(T) bool) []T
-```
-
-Filters a slice using the provided predicate.
 
 
 ## Contributing
