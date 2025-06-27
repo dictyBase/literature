@@ -75,7 +75,8 @@ func (c *Client) GetArticle(pmid string) (*Article, error) {
 	return convertFromInternalArticle(internalArticle), nil
 }
 
-// fetchArticleWithError is a helper function that wraps GetArticle for functional composition
+// fetchArticleWithError is a helper function that wraps GetArticle for
+// functional composition.
 func (c *Client) fetchArticleWithError(pmid string) (*Article, error) {
 	article, err := c.GetArticle(pmid)
 	if err != nil {
