@@ -1,11 +1,11 @@
 package internal
 
-func Map[T, U any](ts []T, f func(T) U) []U {
-	us := make([]U, len(ts))
-	for i, t := range ts {
-		us[i] = f(t)
+func Map[T, U any](source []T, f func(T) U) []U {
+	result := make([]U, len(source))
+	for i, item := range source {
+		result[i] = f(item)
 	}
-	return us
+	return result
 }
 
 func Find[T any](slice []T, predicate func(T) bool) (*T, bool) {
@@ -30,8 +30,8 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
 // Curried versions
 
 func CurriedMap[T, U any](f func(T) U) func([]T) []U {
-	return func(ts []T) []U {
-		return Map(ts, f)
+	return func(source []T) []U {
+		return Map(source, f)
 	}
 }
 
@@ -48,16 +48,16 @@ func CurriedFilter[T any](predicate func(T) bool) func([]T) []T {
 }
 
 // MapWithError applies a function that can return an error to each element
-func MapWithError[T, U any](ts []T, f func(T) (U, error)) ([]U, error) {
-	us := make([]U, len(ts))
-	for i, t := range ts {
-		u, err := f(t)
+func MapWithError[T, U any](source []T, f func(T) (U, error)) ([]U, error) {
+	result := make([]U, len(source))
+	for i, item := range source {
+		mappedItem, err := f(item)
 		if err != nil {
 			return nil, err
 		}
-		us[i] = u
+		result[i] = mappedItem
 	}
-	return us, nil
+	return result, nil
 }
 
 // Partition splits a slice into chunks of a specified size.
