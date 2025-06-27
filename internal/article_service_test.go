@@ -57,8 +57,8 @@ func TestFetchArticle_Success(t *testing.T) {
 </PubmedArticleSet>`, pmid, title, doi)
 
 	service, server := newTestArticleService(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, xmlResponse)
+		http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			fmt.Fprint(writer, xmlResponse)
 		}),
 	)
 	defer server.Close()
@@ -74,7 +74,7 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 	t.Run("request fails", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {}),
 		)
 		server.Close() // Close immediately to simulate network failure
 
@@ -93,7 +93,7 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				time.Sleep(100 * time.Millisecond)
 			}),
 		)
@@ -123,8 +123,8 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 	t.Run("invalid XML response", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, "<malformed xml")
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				fmt.Fprint(writer, "<malformed xml")
 			}),
 		)
 		defer server.Close()
@@ -144,7 +144,7 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 	t.Run("empty response", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				// Return empty body
 			}),
 		)
@@ -166,8 +166,8 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 	t.Run("no articles found", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, "<PubmedArticleSet></PubmedArticleSet>")
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
 			}),
 		)
 		defer server.Close()
@@ -187,8 +187,8 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 	t.Run("empty pmid", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, "<PubmedArticleSet></PubmedArticleSet>")
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
 			}),
 		)
 		defer server.Close()

@@ -42,13 +42,13 @@ func TestSearchPubMedWithLimit(t *testing.T) {
 		</eSearchResult>`)
 
 		service, server := newTestSearchService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				req.Equal("GET", r.Method)
-				req.Contains(r.URL.String(), fmt.Sprintf("term=%s", query))
-				req.Contains(r.URL.String(), fmt.Sprintf("retmax=%d", limit))
-				req.Contains(r.URL.String(), fmt.Sprintf("retstart=%d", offset))
-				w.Header().Set("Content-Type", "application/xml")
-				fmt.Fprint(w, xmlResponse)
+			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				req.Equal("GET", request.Method)
+				req.Contains(request.URL.String(), fmt.Sprintf("term=%s", query))
+				req.Contains(request.URL.String(), fmt.Sprintf("retmax=%d", limit))
+				req.Contains(request.URL.String(), fmt.Sprintf("retstart=%d", offset))
+				writer.Header().Set("Content-Type", "application/xml")
+				fmt.Fprint(writer, xmlResponse)
 			}),
 		)
 		defer server.Close()
