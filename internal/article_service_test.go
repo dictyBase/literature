@@ -23,6 +23,7 @@ func newTestArticleService(
 }
 
 func TestNewArticleService(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	service := NewArticleService()
 
@@ -34,6 +35,7 @@ func TestNewArticleService(t *testing.T) {
 }
 
 func TestFetchArticle_Success(t *testing.T) {
+	t.Parallel()
 	req := require.New(t)
 	const pmid = "12345678"
 	const doi = "10.1234/test.doi"
@@ -56,11 +58,11 @@ func TestFetchArticle_Success(t *testing.T) {
     </PubmedArticle>
 </PubmedArticleSet>`, pmid, title, doi)
 
-	service, server := newTestArticleService(
-		http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			fmt.Fprint(writer, xmlResponse)
-		}),
-	)
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, err := fmt.Fprint(writer, xmlResponse)
+		require.NoError(t, err)
+	})
+	service, server := newTestArticleService(handler)
 	defer server.Close()
 
 	article, err := service.FetchArticle(pmid)
@@ -71,7 +73,9 @@ func TestFetchArticle_Success(t *testing.T) {
 }
 
 func TestFetchArticle_HTTPErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("request fails", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {}),
@@ -91,6 +95,7 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -120,13 +125,15 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 }
 
 func TestFetchArticle_XMLParsingErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("invalid XML response", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
-		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				fmt.Fprint(writer, "<malformed xml")
-			}),
-		)
+		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			_, err := fmt.Fprint(writer, "<malformed xml")
+			require.NoError(t, err)
+		})
+		service, server := newTestArticleService(handler)
 		defer server.Close()
 
 		pmid := "456"
@@ -142,6 +149,7 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 	})
 
 	t.Run("empty response", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -163,13 +171,15 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 }
 
 func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("no articles found", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
-		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
-			}),
-		)
+		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			_, err := fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
+			require.NoError(t, err)
+		})
+		service, server := newTestArticleService(handler)
 		defer server.Close()
 
 		pmid := "101112"
@@ -185,12 +195,13 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 	})
 
 	t.Run("empty pmid", func(t *testing.T) {
+		t.Parallel()
 		req := require.New(t)
-		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
-			}),
-		)
+		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			_, err := fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
+			require.NoError(t, err)
+		})
+		service, server := newTestArticleService(handler)
 		defer server.Close()
 
 		_, err := service.FetchArticle("")
@@ -205,6 +216,7 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 }
 
 func TestFormatAuthor(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name     string
 		author   Author
@@ -232,16 +244,19 @@ func TestFormatAuthor(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			req := require.New(t)
-			result := formatAuthor(tc.author)
-			req.Equal(tc.expected, result)
+			result := formatAuthor(testCase.author)
+			req.Equal(testCase.expected, result)
 		})
 	}
 }
 
 func TestIsDOI(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name     string
 		id       ArticleID
@@ -264,11 +279,13 @@ func TestIsDOI(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			req := require.New(t)
-			result := IsDOI(tc.id)
-			req.Equal(tc.expected, result)
+			result := IsDOI(testCase.id)
+			req.Equal(testCase.expected, result)
 		})
 	}
 }

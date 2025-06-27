@@ -22,7 +22,9 @@ func newTestSearchService(
 }
 
 func TestSearchPubMedWithLimit(t *testing.T) {
+	t.Parallel()
 	t.Run("TestSearchPubMedWithLimit_Success", func(t *testing.T) {
+		t.Parallel()
 		assrt := assert.New(t)
 		const query = "biology"
 		const limit = 5
