@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +37,6 @@ func TestNewArticleService(t *testing.T) {
 
 func TestFetchArticle_Success(t *testing.T) {
 	t.Parallel()
-	req := require.New(t)
 	const pmid = "12345678"
 	const doi = "10.1234/test.doi"
 	const title = "A Test Article"
@@ -58,14 +58,17 @@ func TestFetchArticle_Success(t *testing.T) {
     </PubmedArticle>
 </PubmedArticleSet>`, pmid, title, doi)
 
-	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		_, err := fmt.Fprint(writer, xmlResponse)
-		require.NoError(t, err)
-	})
+	handler := http.HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			_, err := fmt.Fprint(writer, xmlResponse)
+			assert.NoError(t, err)
+		},
+	)
 	service, server := newTestArticleService(handler)
 	defer server.Close()
 
 	article, err := service.FetchArticle(pmid)
+	req := require.New(t)
 	req.NoError(err)
 	req.NotNil(article)
 	req.Equal(pmid, article.GetPMID())
@@ -78,7 +81,9 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {}),
+			http.HandlerFunc(
+				func(writer http.ResponseWriter, request *http.Request) {},
+			),
 		)
 		server.Close() // Close immediately to simulate network failure
 
@@ -98,9 +103,11 @@ func TestFetchArticle_HTTPErrors(t *testing.T) {
 		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				time.Sleep(100 * time.Millisecond)
-			}),
+			http.HandlerFunc(
+				func(writer http.ResponseWriter, request *http.Request) {
+					time.Sleep(100 * time.Millisecond)
+				},
+			),
 		)
 		defer server.Close()
 
@@ -128,22 +135,21 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 	t.Parallel()
 	t.Run("invalid XML response", func(t *testing.T) {
 		t.Parallel()
-		req := require.New(t)
-		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			_, err := fmt.Fprint(writer, "<malformed xml")
-			require.NoError(t, err)
-		})
+		handler := http.HandlerFunc(
+			func(writer http.ResponseWriter, request *http.Request) {
+				_, err := fmt.Fprint(writer, "<malformed xml")
+				assert.NoError(t, err)
+			},
+		)
 		service, server := newTestArticleService(handler)
 		defer server.Close()
 
 		pmid := "456"
 		_, err := service.FetchArticle(pmid)
-
+		req := require.New(t)
 		req.Error(err)
-
 		var pdfErr *PDFError
 		req.ErrorAs(err, &pdfErr)
-
 		req.Equal(PDFErrorArticleNotFound, pdfErr.Type)
 		req.ErrorContains(err, "error unmarshaling efetch XML")
 	})
@@ -152,9 +158,11 @@ func TestFetchArticle_XMLParsingErrors(t *testing.T) {
 		t.Parallel()
 		req := require.New(t)
 		service, server := newTestArticleService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				// Return empty body
-			}),
+			http.HandlerFunc(
+				func(writer http.ResponseWriter, request *http.Request) {
+					// Return empty body
+				},
+			),
 		)
 		defer server.Close()
 
@@ -175,10 +183,15 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 	t.Run("no articles found", func(t *testing.T) {
 		t.Parallel()
 		req := require.New(t)
-		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			_, err := fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
-			require.NoError(t, err)
-		})
+		handler := http.HandlerFunc(
+			func(writer http.ResponseWriter, request *http.Request) {
+				_, err := fmt.Fprint(
+					writer,
+					"<PubmedArticleSet></PubmedArticleSet>",
+				)
+				assert.NoError(t, err)
+			},
+		)
 		service, server := newTestArticleService(handler)
 		defer server.Close()
 
@@ -196,16 +209,21 @@ func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
 
 	t.Run("empty pmid", func(t *testing.T) {
 		t.Parallel()
-		req := require.New(t)
-		handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			_, err := fmt.Fprint(writer, "<PubmedArticleSet></PubmedArticleSet>")
-			require.NoError(t, err)
-		})
+		handler := http.HandlerFunc(
+			func(writer http.ResponseWriter, request *http.Request) {
+				_, err := fmt.Fprint(
+					writer,
+					"<PubmedArticleSet></PubmedArticleSet>",
+				)
+				assert.NoError(t, err)
+			},
+		)
 		service, server := newTestArticleService(handler)
 		defer server.Close()
 
 		_, err := service.FetchArticle("")
 
+		req := require.New(t)
 		req.Error(err)
 
 		var pdfErr *PDFError
