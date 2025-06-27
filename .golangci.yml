@@ -49,7 +49,6 @@ linters:
     - varnamelen
     - wastedassign
     - whitespace
-    - wrapcheck
   settings:
     gosec:
       excludes:
