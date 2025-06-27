@@ -1,5 +1,7 @@
 # Literature - Go Client for PubMed
 
+[![License](https://img.shields.io/badge/License-BSD%202--Clause-blue.svg)](https://github.com/dictyBase/literature/blob/develop/LICENSE)
+
 A clean, idiomatic Go library for accessing PubMed literature data through the NCBI eUtils API.
 
 ## Features
@@ -66,7 +68,6 @@ func main() {
 - [Contributing](#contributing)
 - [Development](#development)
   - [Project Structure](#project-structure)
-- [License](#license)
 - [Support](#support)
 
 ## Modern API (Recommended)
@@ -349,10 +350,6 @@ gotestsum --format-hide-empty-pkg --format standard-verbose --format-icons hivis
 ```
 
 For comprehensive testing guidelines, practices, and advanced usage, see [TESTING.md](TESTING.md).
-
-## License
-
-[Your chosen license]
 
 ## Support
 
