@@ -38,28 +38,6 @@ func convertFromInternalArticle(internal *internal.PubMedArticle) *Article {
 	return article
 }
 
-// convertFromInternalSearchResult converts internal.ESearchResult to public SearchResult
-func convertFromInternalSearchResult(
-	internal *internal.ESearchResult,
-	query string,
-	limit, offset int,
-) *SearchResult {
-	total := 0
-	if internal.Count != "" {
-		if count, err := strconv.Atoi(internal.Count); err == nil {
-			total = count
-		}
-	}
-
-	return &SearchResult{
-		Query:    query,
-		Total:    total,
-		Limit:    limit,
-		Offset:   offset,
-		Articles: []*Article{}, // Would be populated by fetching each PMID if needed
-	}
-}
-
 // convertFromInternalSearchResultWithArticles converts internal search results with detailed article information
 func convertFromInternalSearchResultWithArticles(
 	searchResult *internal.ESearchResult,
