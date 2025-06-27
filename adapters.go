@@ -38,7 +38,8 @@ func convertFromInternalArticle(internal *internal.PubMedArticle) *Article {
 	return article
 }
 
-// convertFromInternalSearchResultWithArticles converts internal search results with detailed article information
+// convertFromInternalSearchResultWithArticles converts internal search results
+// with detailed article information.
 func convertFromInternalSearchResultWithArticles(
 	searchResult *internal.ESearchResult,
 	articleSet *internal.PubMedArticleSet,
