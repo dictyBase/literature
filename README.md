@@ -1,6 +1,10 @@
 # Literature - Go Client for PubMed
 
 [![License](https://img.shields.io/badge/License-BSD%202--Clause-blue.svg)](https://github.com/dictyBase/literature/blob/develop/LICENSE)
+![GitHub action](https://github.com/dictyBase/literature/workflows/Continuous%20integration/badge.svg)
+[![codecov](https://codecov.io/gh/dictyBase/literature/graph/badge.svg?token=RE3OI8BCJS)](https://codecov.io/gh/dictyBase/literature)
+![Last commit](https://badgen.net/github/last-commit/dictyBase/literature/develop)
+[![Funding](https://badgen.net/badge/Funding/Rex%20L%20Chisholm,dictyBase,DCR/yellow?list=|)](https://projectreporter.nih.gov/project_info_description.cfm?aid=10024726&icde=0)
 
 A clean, idiomatic Go library for accessing PubMed literature data through the NCBI eUtils API.
 
