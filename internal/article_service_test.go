@@ -22,7 +22,6 @@ func newTestArticleService(
 	return service, server
 }
 
-// TestNewArticleService_DefaultConfiguration from plan
 func TestNewArticleService(t *testing.T) {
 	req := require.New(t)
 	service := NewArticleService()
@@ -34,15 +33,13 @@ func TestNewArticleService(t *testing.T) {
 	req.Equal(expectedBaseURL, service.baseURL)
 }
 
-func TestFetchArticle(t *testing.T) {
-	// A. Successful Scenarios
-	t.Run("TestFetchArticle_ValidPMID_Success", func(t *testing.T) {
-		req := require.New(t)
-		const pmid = "12345678"
-		const doi = "10.1234/test.doi"
-		const title = "A Test Article"
+func TestFetchArticle_Success(t *testing.T) {
+	req := require.New(t)
+	const pmid = "12345678"
+	const doi = "10.1234/test.doi"
+	const title = "A Test Article"
 
-		xmlResponse := fmt.Sprintf(`
+	xmlResponse := fmt.Sprintf(`
 <PubmedArticleSet>
     <PubmedArticle>
         <MedlineCitation>
@@ -59,22 +56,22 @@ func TestFetchArticle(t *testing.T) {
     </PubmedArticle>
 </PubmedArticleSet>`, pmid, title, doi)
 
-		service, server := newTestArticleService(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, xmlResponse)
-			}),
-		)
-		defer server.Close()
+	service, server := newTestArticleService(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, xmlResponse)
+		}),
+	)
+	defer server.Close()
 
-		article, err := service.FetchArticle(pmid)
-		req.NoError(err)
-		req.NotNil(article)
-		req.Equal(pmid, article.GetPMID())
-		req.Equal(title, article.GetTitle())
-	})
+	article, err := service.FetchArticle(pmid)
+	req.NoError(err)
+	req.NotNil(article)
+	req.Equal(pmid, article.GetPMID())
+	req.Equal(title, article.GetTitle())
+}
 
-	// B. HTTP Client Error Scenarios
-	t.Run("TestFetchArticle_HTTPRequestFails", func(t *testing.T) {
+func TestFetchArticle_HTTPErrors(t *testing.T) {
+	t.Run("request fails", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
@@ -93,7 +90,7 @@ func TestFetchArticle(t *testing.T) {
 		req.Equal(pmid, pdfErr.PMID)
 	})
 
-	t.Run("TestFetchArticle_HTTPTimeout", func(t *testing.T) {
+	t.Run("timeout", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,9 +117,10 @@ func TestFetchArticle(t *testing.T) {
 			strings.Contains(err.Error(), "Client.Timeout exceeded")
 		req.True(isTimeoutError, "expected timeout error, but got: %v", err)
 	})
+}
 
-	// C. XML Parsing Error Scenarios
-	t.Run("TestFetchArticle_InvalidXMLResponse", func(t *testing.T) {
+func TestFetchArticle_XMLParsingErrors(t *testing.T) {
+	t.Run("invalid XML response", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +141,7 @@ func TestFetchArticle(t *testing.T) {
 		req.ErrorContains(err, "error unmarshaling efetch XML")
 	})
 
-	t.Run("TestFetchArticle_EmptyResponse", func(t *testing.T) {
+	t.Run("empty response", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -162,9 +160,10 @@ func TestFetchArticle(t *testing.T) {
 
 		req.ErrorContains(pdfErr.Unwrap(), "EOF")
 	})
+}
 
-	// D. Business Logic Error Scenarios
-	t.Run("TestFetchArticle_NoArticlesFound", func(t *testing.T) {
+func TestFetchArticle_BusinessLogicErrors(t *testing.T) {
+	t.Run("no articles found", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,8 +184,7 @@ func TestFetchArticle(t *testing.T) {
 		req.ErrorContains(err, "no articles found")
 	})
 
-	// E. Edge Cases
-	t.Run("TestFetchArticle_EmptyPMID", func(t *testing.T) {
+	t.Run("empty pmid", func(t *testing.T) {
 		req := require.New(t)
 		service, server := newTestArticleService(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
