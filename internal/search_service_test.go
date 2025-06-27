@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,12 +23,12 @@ func newTestSearchService(
 
 func TestSearchPubMedWithLimit(t *testing.T) {
 	t.Run("TestSearchPubMedWithLimit_Success", func(t *testing.T) {
-		req := require.New(t)
+		assrt := assert.New(t)
 		const query = "biology"
 		const limit = 5
 		const offset = 2
 
-		xmlResponse := fmt.Sprintf(`
+		xmlResponse := `
 		<eSearchResult>
 			<Count>100</Count>
 			<RetMax>5</RetMax>
@@ -39,20 +40,32 @@ func TestSearchPubMedWithLimit(t *testing.T) {
 				<Id>4</Id>
 				<Id>5</Id>
 			</IdList>
-		</eSearchResult>`)
+		</eSearchResult>`
 
 		service, server := newTestSearchService(
-			http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-				req.Equal("GET", request.Method)
-				req.Contains(request.URL.String(), fmt.Sprintf("term=%s", query))
-				req.Contains(request.URL.String(), fmt.Sprintf("retmax=%d", limit))
-				req.Contains(request.URL.String(), fmt.Sprintf("retstart=%d", offset))
-				writer.Header().Set("Content-Type", "application/xml")
-				fmt.Fprint(writer, xmlResponse)
-			}),
+			http.HandlerFunc(
+				func(writer http.ResponseWriter, request *http.Request) {
+					assrt.Equal("GET", request.Method)
+					assrt.Contains(
+						request.URL.String(),
+						fmt.Sprintf("term=%s", query),
+					)
+					assrt.Contains(
+						request.URL.String(),
+						fmt.Sprintf("retmax=%d", limit),
+					)
+					assrt.Contains(
+						request.URL.String(),
+						fmt.Sprintf("retstart=%d", offset),
+					)
+					writer.Header().Set("Content-Type", "application/xml")
+					fmt.Fprint(writer, xmlResponse)
+				},
+			),
 		)
 		defer server.Close()
 
+		req := require.New(t)
 		result, err := service.SearchPubMed(query, limit, offset)
 		req.NoError(err)
 		req.NotNil(result)
