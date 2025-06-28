@@ -98,6 +98,7 @@ client, err := literature.New(
 - `FindSimilar(pmid string, opts ...SearchOption) (*SearchResult, error)` - Find similar articles
 - `GetPDF(pmid string) (*PDF, error)` - Get PDF information
 - `HasPDF(pmid string) (bool, error)` - Check PDF availability
+- `DownloadPDF(pmid, filePath string) error` - Downloads the PDF for a given PMID to the specified path.
 
 #### Configuration Options
 
