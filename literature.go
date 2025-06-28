@@ -213,3 +213,21 @@ func (c *Client) HasPDF(pmid string) (bool, error) {
 
 	return c.pdfService.IsPDFAvailable(pmid)
 }
+
+// DownloadPDF downloads the full PDF for the given PMID to the specified file path.
+func (c *Client) DownloadPDF(pmid, filePath string) error {
+	if err := c.validate.Var(pmid, "required"); err != nil {
+		return &Error{
+			Type:    ErrorTypeInvalidInput,
+			Message: fmt.Sprintf("validation failed for pmid: %s", err.Error()),
+		}
+	}
+	if err := c.validate.Var(filePath, "required"); err != nil {
+		return &Error{
+			Type:    ErrorTypeInvalidInput,
+			Message: fmt.Sprintf("validation failed for filePath: %s", err.Error()),
+		}
+	}
+
+	return c.pdfService.DownloadArticlePDF(pmid, filePath)
+}
