@@ -1,5 +1,3 @@
-// Package literature provides a Go client for accessing PubMed literature data.
-// It offers a clean API for searching articles, fetching metadata, and accessing PDFs.
 package literature
 
 import (
@@ -224,8 +222,11 @@ func (c *Client) DownloadPDF(pmid, filePath string) error {
 	}
 	if err := c.validate.Var(filePath, "required"); err != nil {
 		return &Error{
-			Type:    ErrorTypeInvalidInput,
-			Message: fmt.Sprintf("validation failed for filePath: %s", err.Error()),
+			Type: ErrorTypeInvalidInput,
+			Message: fmt.Sprintf(
+				"validation failed for filePath: %s",
+				err.Error(),
+			),
 		}
 	}
 
