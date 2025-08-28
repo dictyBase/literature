@@ -303,20 +303,7 @@ func convertFromInternalEuropePMCArticle(
 	}
 
 	// Convert journal information
-	article.Journal = EuropePMCJournal{
-		Title:               apiArticle.JournalInfo.Journal.Title,
-		MedlineAbbreviation: apiArticle.JournalInfo.Journal.MedlineAbbreviation,
-		ISOAbbreviation:     apiArticle.JournalInfo.Journal.IsoAbbreviation,
-		ISSN:                apiArticle.JournalInfo.Journal.ISSN,
-		ESSN:                apiArticle.JournalInfo.Journal.ESSN,
-		Volume:              apiArticle.JournalInfo.Volume,
-		Issue:               apiArticle.JournalInfo.Issue,
-		IssueID:             apiArticle.JournalInfo.JournalIssueId,
-		DateOfPublication:   apiArticle.JournalInfo.DateOfPublication,
-		MonthOfPublication:  apiArticle.JournalInfo.MonthOfPublication,
-		YearOfPublication:   apiArticle.JournalInfo.YearOfPublication,
-		NLMID:               apiArticle.JournalInfo.Journal.NLMID,
-	}
+	article.Journal = convertJournalInfo(apiArticle.JournalInfo)
 
 	// Convert authors
 	article.Authors = convertAuthors(apiArticle.AuthorList.Author)
@@ -348,11 +335,34 @@ func convertFromInternalEuropePMCArticle(
 	)
 
 	// Parse dates
+	convertArticleDates(article, apiArticle)
+
+	return article
+}
+
+// convertJournalInfo converts internal journal info to public type.
+func convertJournalInfo(journalInfo internal.EuropePMCAPIJournalInfo) EuropePMCJournal {
+	return EuropePMCJournal{
+		Title:               journalInfo.Journal.Title,
+		MedlineAbbreviation: journalInfo.Journal.MedlineAbbreviation,
+		ISOAbbreviation:     journalInfo.Journal.IsoAbbreviation,
+		ISSN:                journalInfo.Journal.ISSN,
+		ESSN:                journalInfo.Journal.ESSN,
+		Volume:              journalInfo.Volume,
+		Issue:               journalInfo.Issue,
+		IssueID:             journalInfo.JournalIssueId,
+		DateOfPublication:   journalInfo.DateOfPublication,
+		MonthOfPublication:  journalInfo.MonthOfPublication,
+		YearOfPublication:   journalInfo.YearOfPublication,
+		NLMID:               journalInfo.Journal.NLMID,
+	}
+}
+
+// convertArticleDates parses and sets date fields on the article.
+func convertArticleDates(article *EuropePMCArticle, apiArticle *internal.EuropePMCAPIArticle) {
 	article.CreationDate = parseDate(apiArticle.DateOfCreation)
 	article.RevisionDate = parseDate(apiArticle.DateOfRevision)
 	article.PublishDate = parseDate(apiArticle.FirstPublicationDate)
-
-	return article
 }
 
 // convertFromInternalEuropePMCSearchResult converts internal API response to public search result type.
