@@ -6,18 +6,42 @@
 ![Last commit](https://badgen.net/github/last-commit/dictyBase/literature/develop)
 [![Funding](https://badgen.net/badge/Funding/Rex%20L%20Chisholm,dictyBase,DCR/yellow?list=|)](https://projectreporter.nih.gov/project_info_description.cfm?aid=10024726&icde=0)
 
-A clean, idiomatic Go library for accessing PubMed literature data through the NCBI eUtils API.
+A comprehensive, idiomatic Go library for accessing scientific literature through multiple APIs. Supports both PubMed (NCBI eUtils) for authoritative biomedical research and EuropePMC for enhanced European content with rich metadata and citation analytics.
 
 ## Features
 
-- 🔍 Search PubMed articles with natural language queries
-- 📄 Fetch detailed article metadata by PMID
-- 📚 Batch operations for multiple articles
-- 🔗 PDF access and availability checking
-- ⚙️ Configurable HTTP client with timeout and retry options
-- 🛡️ Structured error handling with detailed error types
-- 🔄 Thread-safe for concurrent use
-- 📖 Comprehensive documentation and examples
+### Core Literature Access
+- 🔍 **Advanced Search**: Comprehensive literature search with natural language and structured queries
+- 📄 **Article Retrieval**: Fetch detailed article metadata by PMID with rich information
+- 📚 **Batch Operations**: Efficient processing of multiple articles simultaneously
+- 🔗 **Full-Text Access**: PDF and full-text availability checking and URL retrieval
+- 🔄 **Related Articles**: Discover similar articles and citations
+
+### Technical Features
+- ⚙️ **Configurable Clients**: Custom HTTP clients with timeout and retry policies
+- 🛡️ **Robust Error Handling**: Structured error types with detailed context
+- 🔄 **Thread-Safe**: Safe for concurrent use across multiple goroutines
+- 🔧 **Functional Options**: Clean configuration using the options pattern
+- 📖 **Comprehensive Documentation**: Extensive examples and usage guides
+- 🚀 **High Performance**: Optimized for concurrent operations
+
+### API-Specific Features
+
+#### PubMed (NCBI eUtils) - Distinctive Features
+- 🏛️ **NCBI Integration**: Direct access to the authoritative NCBI PubMed database
+- 🔬 **Biomedical Focus**: Optimized for life sciences and biomedical research
+- 📊 **MeSH Terms**: Access to Medical Subject Headings for precise categorization
+- 🌐 **Global Coverage**: Comprehensive international biomedical literature
+
+#### EuropePMC - Distinctive Features
+- 🇪🇺 **European Excellence**: Enhanced coverage of European research and journals
+- 👥 **Rich Author Data**: Detailed author information with ORCID IDs and institutional affiliations
+- 📊 **Citation Analytics**: Real-time citation counts and impact metrics
+- 🔗 **Multiple Formats**: Access to full-text in PDF, HTML, and XML formats
+- 💰 **Funding Information**: Comprehensive grant and funding agency details
+- 🧪 **Chemical Data**: Detailed chemical substance and compound information
+- 🆓 **Open Access Focus**: Enhanced open access detection and licensing information
+- 🌍 **Multi-Language Support**: Better support for non-English European literature
 
 ## Installation
 
@@ -26,6 +50,10 @@ go get github.com/dictybase/literature
 ```
 
 ## Quick Start
+
+Choose the API that best fits your research needs:
+
+### PubMed (NCBI eUtils) - Best for Biomedical Research
 
 ```go
 package main
@@ -38,7 +66,7 @@ import (
 )
 
 func main() {
-    // Create a new client
+    // Create a PubMed client for biomedical literature
     client, err := literature.New()
     if err != nil {
         log.Fatal(err)
@@ -55,16 +83,61 @@ func main() {
 }
 ```
 
+### EuropePMC - Best for Enhanced Metadata & European Content
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/dictybase/literature"
+)
+
+func main() {
+    // Create an EuropePMC client for rich metadata and European content
+    client, err := literature.NewEuropePMCClient()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Fetch an article with enhanced metadata
+    article, err := client.GetArticle("12345678")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("Title: %s\n", article.Title)
+    fmt.Printf("Journal: %s\n", article.Journal.Title)
+    fmt.Printf("Citations: %d\n", article.CitedByCount)
+    fmt.Printf("Open Access: %t\n", article.IsOpenAccess)
+    
+    // Show author affiliations (EuropePMC-specific feature)
+    for _, author := range article.Authors {
+        fmt.Printf("Author: %s\n", author.FullName)
+        for _, affiliation := range author.Affiliations {
+            fmt.Printf("  - %s\n", affiliation.Affiliation)
+        }
+    }
+}
+```
+
 ## Table of Contents
 
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Modern API (Recommended)](#modern-api-recommended)
+- [PubMed API (NCBI eUtils)](#pubmed-api-ncbi-eutils)
   - [Configuration](#configuration)
   - [Core Methods](#core-methods)
   - [Error Handling](#error-handling)
   - [Examples](#examples)
+- [EuropePMC API](#europepmc-api)
+  - [Configuration](#europepmc-configuration)
+  - [Core Methods](#europepmc-core-methods)
+  - [Search Options](#europepmc-search-options)
+  - [Examples](#europepmc-examples)
 - [Types and Data Structures](#types-and-data-structures)
 - [Error Handling](#error-handling-1)
 - [Thread Safety](#thread-safety)
@@ -74,9 +147,9 @@ func main() {
   - [Project Structure](#project-structure)
 - [Support](#support)
 
-## Modern API (Recommended)
+## PubMed API (NCBI eUtils)
 
-The new `literature` package provides a clean, unified interface for all PubMed operations.
+The `literature` package provides a clean, unified interface for all PubMed operations.
 
 ### Configuration
 
@@ -147,9 +220,219 @@ if err != nil {
 
 See the `examples/` directory for comprehensive usage examples:
 
-- [`examples/basic/`](examples/basic/) - Basic usage patterns
-- [`examples/advanced/`](examples/advanced/) - Advanced configuration and error handling
+- [`examples/basic/`](examples/basic/) - Basic PubMed usage patterns
+- [`examples/advanced/`](examples/advanced/) - Advanced PubMed configuration and error handling
+- [`examples/europepmc/`](examples/europepmc/) - EuropePMC usage examples
 
+## EuropePMC API
+
+The EuropePMC client provides access to the comprehensive European literature database with enhanced metadata and European research content.
+
+### EuropePMC Configuration
+
+Customize the EuropePMC client with various options:
+
+```go
+client, err := literature.NewEuropePMCClient(
+    literature.WithEuropePMCTimeout(60*time.Second),
+    literature.WithEuropePMCUserAgent("MyApp/1.0"),
+    literature.WithEuropePMCEmail("contact@myapp.com"),
+    literature.WithEuropePMCRetryPolicy(5, 2*time.Second),
+    literature.WithEuropePMCRateLimit(5.0), // 5 requests per second
+)
+```
+
+### EuropePMC Core Methods
+
+- `GetArticle(pmid string) (*EuropePMCArticle, error)` - Fetch single article with comprehensive metadata
+- `GetArticles(pmids []string) ([]*EuropePMCArticle, error)` - Fetch multiple articles efficiently
+- `Search(query string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Advanced literature search
+- `FindSimilar(pmid string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Find related articles
+- `HasPDF(pmid string) (bool, error)` - Check PDF availability
+- `GetPDFURLs(pmid string) ([]EuropePMCFullTextURL, error)` - Get all available PDF URLs
+
+#### EuropePMC Configuration Options
+
+- `WithEuropePMCHTTPClient(client *http.Client)` - Custom HTTP client
+- `WithEuropePMCTimeout(timeout time.Duration)` - Request timeout
+- `WithEuropePMCBaseURL(url string)` - Custom API base URL (for testing)
+- `WithEuropePMCUserAgent(userAgent string)` - Custom User-Agent header
+- `WithEuropePMCEmail(email string)` - Contact email for high-volume usage
+- `WithEuropePMCRetryPolicy(maxRetries int, retryDelay time.Duration)` - Retry configuration
+- `WithEuropePMCRateLimit(requestsPerSecond float64)` - Rate limiting
+- `WithEuropePMCDefaultResultType(resultType string)` - Default result type ("core", "lite")
+- `WithEuropePMCDefaultFormat(format string)` - Default response format ("json", "xml")
+
+### EuropePMC Search Options
+
+- `WithEuropePMCLimit(limit int)` - Maximum results per search (default: 20)
+- `WithEuropePMCOffset(offset int)` - Pagination offset
+- `WithEuropePMCResultType(resultType string)` - Result detail level ("core", "lite")
+- `WithEuropePMCFormat(format string)` - Response format ("json", "xml")
+
+### EuropePMC Examples
+
+#### Basic Article Retrieval
+
+```go
+client, err := literature.NewEuropePMCClient()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Get detailed article information
+article, err := client.GetArticle("25844567")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Title: %s\n", article.Title)
+fmt.Printf("Journal: %s (%s)\n", article.Journal.Title, article.Journal.ISOAbbreviation)
+fmt.Printf("Publication Year: %s\n", article.PubYear)
+fmt.Printf("Open Access: %t\n", article.IsOpenAccess)
+fmt.Printf("Citations: %d\n", article.CitedByCount)
+
+// Print authors with affiliations
+for _, author := range article.Authors {
+    fmt.Printf("Author: %s", author.FullName)
+    if author.ORCID != "" {
+        fmt.Printf(" (ORCID: %s)", author.ORCID)
+    }
+    fmt.Println()
+    
+    for _, affiliation := range author.Affiliations {
+        fmt.Printf("  - %s\n", affiliation.Affiliation)
+    }
+}
+
+// Print MeSH headings
+if len(article.MeshHeadings) > 0 {
+    fmt.Println("\nMeSH Headings:")
+    for _, mesh := range article.MeshHeadings {
+        majorTopic := ""
+        if mesh.MajorTopic {
+            majorTopic = " (Major Topic)"
+        }
+        fmt.Printf("  - %s%s\n", mesh.DescriptorName, majorTopic)
+    }
+}
+```
+
+#### Advanced Search with Options
+
+```go
+client, err := literature.NewEuropePMCClient(
+    literature.WithEuropePMCEmail("research@university.edu"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Search for articles with advanced options
+searchResult, err := client.Search(
+    "cancer AND immunotherapy",
+    literature.WithEuropePMCLimit(50),
+    literature.WithEuropePMCResultType("core"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Found %d articles for query: %s\n", searchResult.Total, searchResult.Query)
+
+for i, article := range searchResult.Articles {
+    fmt.Printf("%d. %s\n", i+1, article.Title)
+    fmt.Printf("   Journal: %s (%s)\n", article.Journal.Title, article.PubYear)
+    fmt.Printf("   Open Access: %t, Has PDF: %t\n", article.IsOpenAccess, article.HasPDF)
+    
+    if article.Abstract != "" {
+        abstract := article.Abstract
+        if len(abstract) > 200 {
+            abstract = abstract[:200] + "..."
+        }
+        fmt.Printf("   Abstract: %s\n", abstract)
+    }
+    fmt.Println()
+}
+```
+
+#### PDF Access and Full Text URLs
+
+```go
+client, err := literature.NewEuropePMCClient()
+if err != nil {
+    log.Fatal(err)
+}
+
+pmid := "25844567"
+
+// Check if PDF is available
+hasPDF, err := client.HasPDF(pmid)
+if err != nil {
+    log.Fatal(err)
+}
+
+if hasPDF {
+    // Get all available PDF URLs
+    pdfURLs, err := client.GetPDFURLs(pmid)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Available PDF sources for PMID %s:\n", pmid)
+    for _, pdfURL := range pdfURLs {
+        fmt.Printf("  - %s: %s\n", pdfURL.Site, pdfURL.URL)
+        fmt.Printf("    Availability: %s (%s)\n", 
+                   pdfURL.Availability, pdfURL.AvailabilityCode)
+    }
+} else {
+    fmt.Printf("No PDF available for PMID %s\n", pmid)
+}
+```
+
+#### Finding Similar Articles
+
+```go
+client, err := literature.NewEuropePMCClient()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Find articles similar to a given PMID
+similarResult, err := client.FindSimilar(
+    "25844567",
+    literature.WithEuropePMCLimit(10),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Found %d similar articles:\n", len(similarResult.Articles))
+for _, article := range similarResult.Articles {
+    fmt.Printf("- %s (%s)\n", article.Title, article.PubYear)
+    fmt.Printf("  PMID: %s, Citations: %d\n", article.PMID, article.CitedByCount)
+}
+```
+
+#### Error Handling with EuropePMC
+
+```go
+article, err := client.GetArticle("invalid-pmid")
+if err != nil {
+    if litErr, ok := err.(*literature.Error); ok {
+        switch litErr.Type {
+        case literature.ErrorTypeInvalidInput:
+            fmt.Println("Invalid PMID format")
+        case literature.ErrorTypeArticleNotFound:
+            fmt.Println("Article not found in EuropePMC")
+        case literature.ErrorTypeAPIError:
+            fmt.Printf("EuropePMC API error: %s\n", litErr.Message)
+        case literature.ErrorTypeNetworkError:
+            fmt.Println("Network error - check connection")
+        }
+    }
+}
+```
 
 ## Types and Data Structures
 
@@ -242,6 +525,119 @@ type OALink struct {
 }
 ```
 
+### EuropePMC Types
+
+#### EuropePMCArticle
+
+Represents a comprehensive article from EuropePMC with rich metadata.
+
+```go
+type EuropePMCArticle struct {
+    ID           string                 `json:"id"`
+    Source       string                 `json:"source"`
+    PMID         string                 `json:"pmid"`
+    PMCID        string                 `json:"pmcid,omitempty"`
+    DOI          string                 `json:"doi,omitempty"`
+    Title        string                 `json:"title"`
+    AuthorString string                 `json:"author_string"`
+    Authors      []EuropePMCAuthor      `json:"authors"`
+    Abstract     string                 `json:"abstract"`
+    Journal      EuropePMCJournal       `json:"journal"`
+    PubYear      string                 `json:"pub_year"`
+    PageInfo     string                 `json:"page_info,omitempty"`
+    Keywords     []string               `json:"keywords,omitempty"`
+    FullTextURLs []EuropePMCFullTextURL `json:"full_text_urls,omitempty"`
+    IsOpenAccess bool                   `json:"is_open_access"`
+    HasPDF       bool                   `json:"has_pdf"`
+    License      string                 `json:"license,omitempty"`
+    CitedByCount int                    `json:"cited_by_count"`
+    Language     string                 `json:"language,omitempty"`
+    PubTypes     []string               `json:"pub_types,omitempty"`
+    MeshHeadings []EuropePMCMeshHeading `json:"mesh_headings,omitempty"`
+    Chemicals    []EuropePMCChemical    `json:"chemicals,omitempty"`
+    Grants       []EuropePMCGrant       `json:"grants,omitempty"`
+    PublishDate  *time.Time             `json:"publish_date,omitempty"`
+    CreationDate *time.Time             `json:"creation_date,omitempty"`
+    RevisionDate *time.Time             `json:"revision_date,omitempty"`
+}
+```
+
+#### EuropePMCAuthor
+
+```go
+type EuropePMCAuthor struct {
+    FullName     string                       `json:"full_name"`
+    FirstName    string                       `json:"first_name"`
+    LastName     string                       `json:"last_name"`
+    Initials     string                       `json:"initials"`
+    ORCID        string                       `json:"orcid,omitempty"`
+    Affiliations []EuropePMCAuthorAffiliation `json:"affiliations,omitempty"`
+}
+```
+
+#### EuropePMCJournal
+
+```go
+type EuropePMCJournal struct {
+    Title               string `json:"title"`
+    MedlineAbbreviation string `json:"medline_abbreviation,omitempty"`
+    ISOAbbreviation     string `json:"iso_abbreviation,omitempty"`
+    ISSN                string `json:"issn,omitempty"`
+    ESSN                string `json:"essn,omitempty"`
+    Volume              string `json:"volume,omitempty"`
+    Issue               string `json:"issue,omitempty"`
+    IssueID             int    `json:"issue_id,omitempty"`
+    DateOfPublication   string `json:"date_of_publication,omitempty"`
+    MonthOfPublication  int    `json:"month_of_publication,omitempty"`
+    YearOfPublication   int    `json:"year_of_publication,omitempty"`
+    NLMID               string `json:"nlm_id,omitempty"`
+}
+```
+
+#### EuropePMCSearchResult
+
+```go
+type EuropePMCSearchResult struct {
+    Query    string              `json:"query"`
+    Total    int                 `json:"total"`
+    Articles []*EuropePMCArticle `json:"articles"`
+    Limit    int                 `json:"limit"`
+    Offset   int                 `json:"offset"`
+}
+```
+
+#### EuropePMCFullTextURL
+
+```go
+type EuropePMCFullTextURL struct {
+    Availability     string `json:"availability"`
+    AvailabilityCode string `json:"availability_code"`
+    DocumentStyle    string `json:"document_style"`
+    Site             string `json:"site"`
+    URL              string `json:"url"`
+}
+```
+
+#### EuropePMCMeshHeading
+
+```go
+type EuropePMCMeshHeading struct {
+    MajorTopic     bool                     `json:"major_topic"`
+    DescriptorName string                   `json:"descriptor_name"`
+    MeshQualifiers []EuropePMCMeshQualifier `json:"mesh_qualifiers,omitempty"`
+}
+```
+
+#### EuropePMCGrant
+
+```go
+type EuropePMCGrant struct {
+    GrantID string `json:"grant_id"`
+    Agency  string `json:"agency"`
+    OrderIn int    `json:"order_in"`
+}
+```
+
 ## Error Handling
 
 ### PDFError
@@ -313,13 +709,21 @@ include this feature.
 ```
 literature/
 ├── doc.go              # Package documentation
-├── literature.go       # Main client interface
-├── types.go           # Public data structures
-├── options.go         # Configuration options
+├── literature.go       # Main PubMed client interface
+├── europepmc.go        # EuropePMC client interface
+├── types.go           # PubMed data structures
+├── europepmc_types.go  # EuropePMC data structures
+├── options.go         # PubMed configuration options
+├── europepmc_options.go # EuropePMC configuration options
 ├── errors.go          # Error types and handling
 ├── adapters.go        # Internal service adapters
 ├── internal/          # Private implementation details
+│   ├── pubmed_service.go    # PubMed API client
+│   └── europepmc_service.go # EuropePMC API client
 ├── examples/          # Usage examples
+│   ├── basic/         # Basic PubMed examples
+│   ├── advanced/      # Advanced PubMed examples
+│   └── europepmc/     # EuropePMC examples
 ├── testdata/          # Test fixtures
 └── cmd/pubmed/        # CLI tool (optional)
 ```
@@ -358,4 +762,9 @@ For comprehensive testing guidelines, practices, and advanced usage, see [TESTIN
 
 ## Support
 
-For issues and questions, please use the GitHub issue tracker.
+For issues and questions, please use the [GitHub issue tracker](https://github.com/dictyBase/literature/issues).
+
+- 🐛 **Bug Reports**: Found a bug? [Create an issue](https://github.com/dictyBase/literature/issues/new)
+- 💡 **Feature Requests**: Have an idea? We'd love to hear it!
+- ❓ **Questions**: Need help? Check existing issues or create a new one
+- 📖 **Documentation**: Improvements to docs are always welcome
