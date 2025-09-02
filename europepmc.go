@@ -9,6 +9,13 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+const (
+	// identifierTypePMID represents PMID identifier type.
+	identifierTypePMID = "PMID"
+	// identifierTypeDOI represents DOI identifier type.
+	identifierTypeDOI = "DOI"
+)
+
 // EuropePMCClient provides access to EuropePMC literature services.
 type EuropePMCClient struct {
 	europePMCService  *internal.EuropePMCService
@@ -67,6 +74,12 @@ func NewEuropePMCClient(opts ...EuropePMCOption) (*EuropePMCClient, error) {
 			internal.WithEuropePMCEmail(client.email),
 		)
 	}
+	if client.baseURL != "" {
+		serviceOpts = append(
+			serviceOpts,
+			internal.WithEuropePMCBaseURL(client.baseURL),
+		)
+	}
 
 	client.europePMCService = internal.NewEuropePMCService(serviceOpts...)
 
@@ -75,42 +88,88 @@ func NewEuropePMCClient(opts ...EuropePMCOption) (*EuropePMCClient, error) {
 
 // GetArticle retrieves article metadata for the given PMID from EuropePMC.
 func (c *EuropePMCClient) GetArticle(pmid string) (*EuropePMCArticle, error) {
-	if err := c.validate.Var(pmid, "required"); err != nil {
+	return c.fetchArticleWithValidation(pmid, identifierTypePMID, func() (*internal.EuropePMCAPIResponse, error) {
+		return c.europePMCService.FetchArticle(pmid)
+	})
+}
+
+// GetArticleByDOI retrieves article metadata for the given DOI from EuropePMC.
+func (c *EuropePMCClient) GetArticleByDOI(doi string) (*EuropePMCArticle, error) {
+	return c.fetchArticleWithValidation(doi, identifierTypeDOI, func() (*internal.EuropePMCAPIResponse, error) {
+		return c.europePMCService.FetchArticleByDOI(doi)
+	})
+}
+
+// fetchArticleWithValidation is a helper function that handles the common logic
+// for fetching articles with validation and error handling.
+func (c *EuropePMCClient) fetchArticleWithValidation(
+	identifier, identifierType string,
+	fetchFunc func() (*internal.EuropePMCAPIResponse, error),
+) (*EuropePMCArticle, error) {
+	if err := c.validate.Var(identifier, "required"); err != nil {
 		return nil, &Error{
 			Type:    ErrorTypeInvalidInput,
 			Message: fmt.Sprintf("validation failed: %s", err.Error()),
 		}
 	}
 
-	apiResponse, err := c.europePMCService.FetchArticle(pmid)
+	apiResponse, err := fetchFunc()
 	if err != nil {
-		return nil, &Error{
-			Type:    ErrorTypeAPIError,
-			Message: fmt.Sprintf("failed to fetch article: %s", err.Error()),
-			PMID:    pmid,
-			Cause:   err,
-		}
+		return nil, c.createAPIError(identifier, identifierType, err)
 	}
 
 	if apiResponse.HitCount == 0 {
-		return nil, &Error{
-			Type:    ErrorTypeArticleNotFound,
-			Message: "article not found",
-			PMID:    pmid,
-		}
+		return nil, c.createNotFoundError(identifier, identifierType)
 	}
 
 	if len(apiResponse.ResultList.Result) == 0 {
-		return nil, &Error{
-			Type:    ErrorTypeParseError,
-			Message: "no results in response",
-			PMID:    pmid,
-		}
+		return nil, c.createParseError(identifier, identifierType)
 	}
 
 	return convertFromInternalEuropePMCArticle(
 		&apiResponse.ResultList.Result[0],
 	), nil
+}
+
+// createAPIError creates an API error with the appropriate identifier context.
+func (c *EuropePMCClient) createAPIError(identifier, identifierType string, cause error) *Error {
+	errWithContext := &Error{
+		Type:    ErrorTypeAPIError,
+		Message: fmt.Sprintf("failed to fetch article: %s", cause.Error()),
+		Cause:   cause,
+	}
+	c.setErrorIdentifier(errWithContext, identifier, identifierType)
+	return errWithContext
+}
+
+// createNotFoundError creates a not found error with the appropriate identifier context.
+func (c *EuropePMCClient) createNotFoundError(identifier, identifierType string) *Error {
+	errWithContext := &Error{
+		Type:    ErrorTypeArticleNotFound,
+		Message: "article not found",
+	}
+	c.setErrorIdentifier(errWithContext, identifier, identifierType)
+	return errWithContext
+}
+
+// createParseError creates a parse error with the appropriate identifier context.
+func (c *EuropePMCClient) createParseError(identifier, identifierType string) *Error {
+	errWithContext := &Error{
+		Type:    ErrorTypeParseError,
+		Message: "no results in response",
+	}
+	c.setErrorIdentifier(errWithContext, identifier, identifierType)
+	return errWithContext
+}
+
+// setErrorIdentifier sets the appropriate identifier field on an error based on type.
+func (c *EuropePMCClient) setErrorIdentifier(err *Error, identifier, identifierType string) {
+	switch identifierType {
+	case identifierTypePMID:
+		err.PMID = identifier
+	case identifierTypeDOI:
+		err.DOI = identifier
+	}
 }
 
 // fetchArticleWithError is a helper function that wraps GetArticle for
