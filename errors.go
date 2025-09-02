@@ -39,6 +39,7 @@ type Error struct {
 	Type    ErrorType `json:"type"`
 	Message string    `json:"message"`
 	PMID    string    `json:"pmid,omitempty"`
+	DOI     string    `json:"doi,omitempty"`
 	Query   string    `json:"query,omitempty"`
 	Cause   error     `json:"-"`
 }
@@ -47,6 +48,9 @@ type Error struct {
 func (e *Error) Error() string {
 	if e.PMID != "" {
 		return fmt.Sprintf("literature error [%s] for PMID %s: %s", e.Type, e.PMID, e.Message)
+	}
+	if e.DOI != "" {
+		return fmt.Sprintf("literature error [%s] for DOI %s: %s", e.Type, e.DOI, e.Message)
 	}
 	if e.Query != "" {
 		return fmt.Sprintf("literature error [%s] for query '%s': %s", e.Type, e.Query, e.Message)
@@ -98,6 +102,15 @@ func NewErrorWithQuery(errorType ErrorType, query, message string) *Error {
 	}
 }
 
+// NewErrorWithDOI creates a new Error associated with a specific DOI.
+func NewErrorWithDOI(errorType ErrorType, doi, message string) *Error {
+	return &Error{
+		Type:    errorType,
+		Message: message,
+		DOI:     doi,
+	}
+}
+
 // WrapError wraps an existing error with additional context.
 func WrapError(errorType ErrorType, message string, cause error) *Error {
 	return &Error{
@@ -113,6 +126,16 @@ func WrapErrorWithPMID(errorType ErrorType, pmid, message string, cause error) *
 		Type:    errorType,
 		Message: message,
 		PMID:    pmid,
+		Cause:   cause,
+	}
+}
+
+// WrapErrorWithDOI wraps an existing error with DOI context.
+func WrapErrorWithDOI(errorType ErrorType, doi, message string, cause error) *Error {
+	return &Error{
+		Type:    errorType,
+		Message: message,
+		DOI:     doi,
 		Cause:   cause,
 	}
 }
