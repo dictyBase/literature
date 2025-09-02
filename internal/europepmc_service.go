@@ -47,6 +47,15 @@ func WithEuropePMCEmail(email string) EuropePMCServiceOption {
 	}
 }
 
+// WithEuropePMCBaseURL sets the base URL for the service (primarily for testing).
+func WithEuropePMCBaseURL(baseURL string) EuropePMCServiceOption {
+	return func(s *EuropePMCService) {
+		if baseURL != "" {
+			s.baseURL = baseURL
+		}
+	}
+}
+
 // NewEuropePMCService creates a new EuropePMC service with the provided options.
 func NewEuropePMCService(opts ...EuropePMCServiceOption) *EuropePMCService {
 	service := &EuropePMCService{
@@ -67,6 +76,22 @@ func (s *EuropePMCService) FetchArticle(
 	pmid string,
 ) (*EuropePMCAPIResponse, error) {
 	query := fmt.Sprintf("ext_id:%s", pmid)
+	params := EuropePMCSearchParams{
+		Query:      query,
+		ResultType: "core",
+		Format:     "json",
+		PageSize:   1,
+		CursorMark: "*",
+	}
+
+	return s.SearchArticles(params)
+}
+
+// FetchArticleByDOI retrieves article metadata for the given DOI from EuropePMC.
+func (s *EuropePMCService) FetchArticleByDOI(
+	doi string,
+) (*EuropePMCAPIResponse, error) {
+	query := fmt.Sprintf("DOI:\"%s\"", doi)
 	params := EuropePMCSearchParams{
 		Query:      query,
 		ResultType: "core",
