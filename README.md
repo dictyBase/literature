@@ -68,6 +68,7 @@ Choose the API that best fits your research needs:
 | **Author Info** | Basic | Rich (ORCID, affiliations) |
 | **Citation Metrics** | No | Yes (real-time counts) |
 | **Full Text Access** | PDF | Enhanced PDF/HTML/XML |
+| **DOI Support** | Extract from articles | Direct retrieval by DOI |
 | **Funding Data** | No | Yes (grants, agencies) |
 | **Open Access** | Basic detection | Enhanced licensing info |
 | **Rate Limits** | 3 req/sec | 10 req/sec (configurable) |
@@ -123,7 +124,7 @@ func main() {
         log.Fatal(err)
     }
 
-    // Fetch an article with enhanced metadata
+    // Fetch an article with enhanced metadata by PMID
     article, err := client.GetArticle("12345678")
     if err != nil {
         log.Fatal(err)
@@ -133,6 +134,14 @@ func main() {
     fmt.Printf("Journal: %s\n", article.Journal.Title)
     fmt.Printf("Citations: %d\n", article.CitedByCount)
     fmt.Printf("Open Access: %t\n", article.IsOpenAccess)
+    
+    // Alternatively, fetch directly by DOI
+    articleByDOI, err := client.GetArticleByDOI("10.1038/nature12373")
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("\nArticle by DOI: %s\n", articleByDOI.Title)
     
     // Show author affiliations (EuropePMC-specific feature)
     for _, author := range article.Authors {
@@ -195,6 +204,24 @@ client, err := literature.New(
 - `GetPDF(pmid string) (*PDF, error)` - Get PDF information
 - `HasPDF(pmid string) (bool, error)` - Check PDF availability
 - `DownloadPDF(pmid, filePath string) error` - Downloads the PDF for a given PMID to the specified path.
+
+#### DOI Support
+
+While PubMed doesn't support direct DOI-based retrieval, articles contain DOI information:
+
+```go
+article, err := client.GetArticle("12345678")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Extract DOI from article if available
+if doi, hasDOI := article.GetDOI(); hasDOI {
+    fmt.Printf("Article DOI: %s\n", doi)
+} else {
+    fmt.Println("No DOI available for this article")
+}
+```
 
 #### Configuration Options
 
@@ -268,11 +295,33 @@ client, err := literature.NewEuropePMCClient(
 ### EuropePMC Core Methods
 
 - `GetArticle(pmid string) (*EuropePMCArticle, error)` - Fetch single article with comprehensive metadata
+- `GetArticleByDOI(doi string) (*EuropePMCArticle, error)` - Fetch article directly by DOI
 - `GetArticles(pmids []string) ([]*EuropePMCArticle, error)` - Fetch multiple articles efficiently
 - `Search(query string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Advanced literature search
 - `FindSimilar(pmid string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Find related articles
 - `HasPDF(pmid string) (bool, error)` - Check PDF availability
 - `GetPDFURLs(pmid string) ([]EuropePMCFullTextURL, error)` - Get all available PDF URLs
+
+#### DOI Support
+
+EuropePMC provides full DOI support with direct retrieval:
+
+```go
+client, err := literature.NewEuropePMCClient()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Fetch article directly by DOI
+article, err := client.GetArticleByDOI("10.1038/nature12373")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Title: %s\n", article.Title)
+fmt.Printf("PMID: %s\n", article.PMID)
+fmt.Printf("DOI: %s\n", article.DOI)
+```
 
 #### EuropePMC Configuration Options
 
