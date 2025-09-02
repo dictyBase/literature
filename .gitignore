@@ -9,3 +9,4 @@ efetch-pmc.xml
 .mcp.json
 .gemini
 europepmc_response.json
+coverage.out
