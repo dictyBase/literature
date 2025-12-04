@@ -7,12 +7,12 @@ toolchain go1.24.9
 replace github.com/dictybase/literature => ../../
 
 require (
+	github.com/IBM/fp-go/v2 v2.0.0-20251204125025-ff48d8953e6a
 	github.com/dictybase/literature v0.0.0-00010101000000-000000000000
 	github.com/urfave/cli/v2 v2.27.7
 )
 
 require (
-	github.com/IBM/fp-go/v2 v2.0.0-20251204125025-ff48d8953e6a // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
