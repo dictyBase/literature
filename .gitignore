@@ -10,3 +10,7 @@ efetch-pmc.xml
 .gemini
 europepmc_response.json
 coverage.out
+
+# Ignore example binaries
+examples/basic/basic-example
+examples/advanced/advanced-example
