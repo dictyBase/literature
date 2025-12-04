@@ -16,7 +16,10 @@ import (
 )
 
 // Context is the base context for the CLI tool.
-type Context struct{}
+type Context struct {
+	Identifier string
+	OutputFile string
+}
 
 // WithEuropeClient adds the EuropePMC client to the context.
 type WithEuropeClient struct {
@@ -45,12 +48,6 @@ var (
 		},
 	)
 )
-
-// Clients holds the API clients.
-type Clients struct {
-	Europe *literature.EuropePMCClient
-	PubMed *literature.Client
-}
 
 func main() {
 	app := &cli.App{
@@ -81,13 +78,13 @@ func run(ctx *cli.Context) error {
 
 	// Construct the program
 	return F.Pipe5(
-		IOE.Do[error](Context{}),
+		IOE.Do[error](Context{
+			Identifier: identifier,
+			OutputFile: outputFile,
+		}),
 		IOE.Bind(SetEuropeClient, createEuropeClient),
 		IOE.Bind(SetPubMedClient, createPubMedClient),
-		IOE.Chain(func(epc WithPubMedClient) IOE.IOEither[error, any] {
-			clients := Clients{Europe: epc.Europe, PubMed: epc.PubMed}
-			return fetchAndProcess(clients, identifier, outputFile)
-		}),
+		IOE.Chain(fetchAndProcess),
 		ToEither,
 		E.Fold(
 			F.Identity[error],
@@ -101,21 +98,20 @@ func run(ctx *cli.Context) error {
 // --- Logic Flow ---
 
 func fetchAndProcess(
-	clients Clients,
-	identifier, outputFile string,
+	ctx WithPubMedClient,
 ) IOE.IOEither[error, any] {
 	// EuropePMC Flow
 	europeFlow := F.Pipe1(
-		fetchEuropeArticle(clients.Europe, identifier),
-		IOE.Chain(processEuropeArticle(clients, outputFile)),
+		fetchEuropeArticle(ctx.Europe, ctx.Identifier),
+		IOE.Chain(processEuropeArticle(ctx, ctx.OutputFile)),
 	)
 
 	// PubMed Flow (Fallback)
 	pubMedFlow := func() IOE.IOEither[error, any] {
 		fmt.Printf("\nNot found in EuropePMC. Trying PubMed...\n")
 		return F.Pipe1(
-			resolvePMID(clients.PubMed, identifier),
-			IOE.Chain(processPubMedFlow(clients, outputFile)),
+			resolvePMID(ctx.PubMed, ctx.Identifier),
+			IOE.Chain(processPubMedFlow(ctx, ctx.OutputFile)),
 		)
 	}
 
@@ -124,7 +120,7 @@ func fetchAndProcess(
 }
 
 func processEuropeArticle(
-	clients Clients,
+	ctx WithPubMedClient,
 	outputFile string,
 ) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
@@ -142,7 +138,7 @@ func processEuropeArticle(
 						}
 						// Transform IOEither[error, string] to IOEither[error, any]
 						downloadOp := downloadEuropePDF(
-							clients.Europe,
+							ctx.Europe,
 							article.PMID,
 							outputFile,
 						)
@@ -162,7 +158,7 @@ func processEuropeArticle(
 						return IOE.Of[error, any](nil)
 					}
 					return downloadPubMedPDF(
-						clients.PubMed,
+						ctx.PubMed,
 						article.PMID,
 						outputFile,
 					)
@@ -173,12 +169,12 @@ func processEuropeArticle(
 }
 
 func processPubMedFlow(
-	clients Clients,
+	ctx WithPubMedClient,
 	outputFile string,
 ) func(string) IOE.IOEither[error, any] {
 	return func(pmid string) IOE.IOEither[error, any] {
 		return F.Pipe1(
-			fetchPubMedArticle(clients.PubMed, pmid),
+			fetchPubMedArticle(ctx.PubMed, pmid),
 			IOE.Chain(
 				func(article *literature.Article) IOE.IOEither[error, any] {
 					return F.Pipe1(
@@ -186,7 +182,7 @@ func processPubMedFlow(
 						IOE.Chain(
 							func(art *literature.Article) IOE.IOEither[error, any] {
 								return downloadPubMedPDF(
-									clients.PubMed,
+									ctx.PubMed,
 									art.PMID,
 									outputFile,
 								)
