@@ -15,6 +15,37 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// Context is the base context for the CLI tool.
+type Context struct{}
+
+// WithEuropeClient adds the EuropePMC client to the context.
+type WithEuropeClient struct {
+	Context
+	Europe *literature.EuropePMCClient
+}
+
+// WithPubMedClient adds the PubMed client to the context.
+type WithPubMedClient struct {
+	WithEuropeClient
+	PubMed *literature.Client
+}
+
+var (
+	// SetEuropeClient sets the EuropePMC client in the context.
+	SetEuropeClient = F.Curry2(
+		func(epc *literature.EuropePMCClient, ctx Context) WithEuropeClient {
+			return WithEuropeClient{Context: ctx, Europe: epc}
+		},
+	)
+
+	// SetPubMedClient sets the PubMed client in the context.
+	SetPubMedClient = F.Curry2(
+		func(epc *literature.Client, ctx WithEuropeClient) WithPubMedClient {
+			return WithPubMedClient{WithEuropeClient: ctx, PubMed: epc}
+		},
+	)
+)
+
 // Clients holds the API clients.
 type Clients struct {
 	Europe *literature.EuropePMCClient
@@ -49,23 +80,30 @@ func run(ctx *cli.Context) error {
 	outputFile := ctx.String("output")
 
 	// Construct the program
-	program := F.Pipe1(
-		createClients(),
-		IOE.Chain(func(clients Clients) IOE.IOEither[error, any] {
+	return F.Pipe5(
+		IOE.Do[error](Context{}),
+		IOE.Bind(SetEuropeClient, createEuropeClient),
+		IOE.Bind(SetPubMedClient, createPubMedClient),
+		IOE.Chain(func(epc WithPubMedClient) IOE.IOEither[error, any] {
+			clients := Clients{Europe: epc.Europe, PubMed: epc.PubMed}
 			return fetchAndProcess(clients, identifier, outputFile)
 		}),
+		ToEither,
+		E.Fold(
+			F.Identity[error],
+			F.Constant1[any, error](nil),
+		),
 	)
 
 	// Execute the program
-	return E.Fold(
-		F.Identity[error],
-		F.Constant1[any, error](nil),
-	)(program())
 }
 
 // --- Logic Flow ---
 
-func fetchAndProcess(clients Clients, identifier, outputFile string) IOE.IOEither[error, any] {
+func fetchAndProcess(
+	clients Clients,
+	identifier, outputFile string,
+) IOE.IOEither[error, any] {
 	// EuropePMC Flow
 	europeFlow := F.Pipe1(
 		fetchEuropeArticle(clients.Europe, identifier),
@@ -85,69 +123,112 @@ func fetchAndProcess(clients Clients, identifier, outputFile string) IOE.IOEithe
 	return IOE.MonadAlt(europeFlow, pubMedFlow)
 }
 
-func processEuropeArticle(clients Clients, outputFile string) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
+func processEuropeArticle(
+	clients Clients,
+	outputFile string,
+) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
 		return F.Pipe1(
 			printEuropeDetails(article),
-			IOE.Chain(func(a *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-				if a.HasPDF {
-					fmt.Println("\nPDF available via EuropePMC.")
-					if a.PMID == "" {
-						fmt.Println("Warning: No PMID, cannot reliably fetch PDF.")
+			IOE.Chain(
+				func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
+					if article.HasPDF {
+						fmt.Println("\nPDF available via EuropePMC.")
+						if article.PMID == "" {
+							fmt.Println(
+								"Warning: No PMID, cannot reliably fetch PDF.",
+							)
+							return IOE.Of[error, any](nil)
+						}
+						// Transform IOEither[error, string] to IOEither[error, any]
+						downloadOp := downloadEuropePDF(
+							clients.Europe,
+							article.PMID,
+							outputFile,
+						)
+						return IOE.MonadMap(
+							downloadOp,
+							func(string) any { return nil },
+						)
+					}
+					// Partial Fallback
+					fmt.Println(
+						"\nPDF NOT available via EuropePMC. Trying PubMed for PDF...",
+					)
+					if article.PMID == "" {
+						fmt.Println(
+							"No PMID available to query PubMed for PDF.",
+						)
 						return IOE.Of[error, any](nil)
 					}
-					// Transform IOEither[error, string] to IOEither[error, any]
-					downloadOp := downloadEuropePDF(clients.Europe, a.PMID, outputFile)
-					return IOE.MonadMap(downloadOp, func(string) any { return nil })
-				}
-				// Partial Fallback
-				fmt.Println("\nPDF NOT available via EuropePMC. Trying PubMed for PDF...")
-				if a.PMID == "" {
-					fmt.Println("No PMID available to query PubMed for PDF.")
-					return IOE.Of[error, any](nil)
-				}
-				return downloadPubMedPDF(clients.PubMed, a.PMID, outputFile)
-			}),
+					return downloadPubMedPDF(
+						clients.PubMed,
+						article.PMID,
+						outputFile,
+					)
+				},
+			),
 		)
 	}
 }
 
-func processPubMedFlow(clients Clients, outputFile string) func(string) IOE.IOEither[error, any] {
+func processPubMedFlow(
+	clients Clients,
+	outputFile string,
+) func(string) IOE.IOEither[error, any] {
 	return func(pmid string) IOE.IOEither[error, any] {
 		return F.Pipe1(
 			fetchPubMedArticle(clients.PubMed, pmid),
-			IOE.Chain(func(article *literature.Article) IOE.IOEither[error, any] {
-				return F.Pipe1(
-					printPubMedDetails(article),
-					IOE.Chain(func(a *literature.Article) IOE.IOEither[error, any] {
-						return downloadPubMedPDF(clients.PubMed, a.PMID, outputFile)
-					}),
-				)
-			}),
+			IOE.Chain(
+				func(article *literature.Article) IOE.IOEither[error, any] {
+					return F.Pipe1(
+						printPubMedDetails(article),
+						IOE.Chain(
+							func(art *literature.Article) IOE.IOEither[error, any] {
+								return downloadPubMedPDF(
+									clients.PubMed,
+									art.PMID,
+									outputFile,
+								)
+							},
+						),
+					)
+				},
+			),
 		)
 	}
 }
 
 // --- Wrappers ---
 
-func createClients() IOE.IOEither[error, Clients] {
-	return IOE.TryCatchError(func() (Clients, error) {
-		europeClient, err := literature.NewEuropePMCClient()
-		if err != nil {
-			return Clients{}, fmt.Errorf("failed to create EuropePMC client: %w", err)
-		}
-		pubMedClient, err := literature.New()
-		if err != nil {
-			return Clients{}, fmt.Errorf("failed to create PubMed client: %w", err)
-		}
-		return Clients{Europe: europeClient, PubMed: pubMedClient}, nil
+func createEuropeClient(
+	_ Context,
+) IOE.IOEither[error, *literature.EuropePMCClient] {
+	return IOE.TryCatchError(func() (*literature.EuropePMCClient, error) {
+		return literature.NewEuropePMCClient()
 	})
 }
 
-func fetchEuropeArticle(client *literature.EuropePMCClient, identifier string) IOE.IOEither[error, *literature.EuropePMCArticle] {
+func createPubMedClient(
+	_ WithEuropeClient,
+) IOE.IOEither[error, *literature.Client] {
+	return IOE.TryCatchError(func() (*literature.Client, error) {
+		return literature.New()
+	})
+}
+
+func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
+	return ioe()
+}
+
+func fetchEuropeArticle(
+	client *literature.EuropePMCClient,
+	identifier string,
+) IOE.IOEither[error, *literature.EuropePMCArticle] {
 	return IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
 		fmt.Println("Checking EuropePMC...")
-		isDOI := strings.Contains(identifier, "/") || strings.HasPrefix(identifier, "10.")
+		isDOI := strings.Contains(identifier, "/") ||
+			strings.HasPrefix(identifier, "10.")
 		if isDOI {
 			return client.GetArticleByDOI(identifier)
 		}
@@ -155,16 +236,23 @@ func fetchEuropeArticle(client *literature.EuropePMCClient, identifier string) I
 	})
 }
 
-func resolvePMID(client *literature.Client, identifier string) IOE.IOEither[error, string] {
+func resolvePMID(
+	client *literature.Client,
+	identifier string,
+) IOE.IOEither[error, string] {
 	return IOE.TryCatchError(func() (string, error) {
-		isDOI := strings.Contains(identifier, "/") || strings.HasPrefix(identifier, "10.")
+		isDOI := strings.Contains(identifier, "/") ||
+			strings.HasPrefix(identifier, "10.")
 		if !isDOI {
 			return identifier, nil
 		}
 		fmt.Printf("Resolving DOI %s in PubMed...\n", identifier)
 		searchResults, err := client.Search(identifier)
 		if err != nil || searchResults.Total == 0 {
-			return "", fmt.Errorf("article not found in PubMed via DOI: %s", identifier)
+			return "", fmt.Errorf(
+				"article not found in PubMed via DOI: %s",
+				identifier,
+			)
 		}
 		if len(searchResults.Articles) > 0 {
 			return searchResults.Articles[0].PMID, nil
@@ -173,13 +261,19 @@ func resolvePMID(client *literature.Client, identifier string) IOE.IOEither[erro
 	})
 }
 
-func fetchPubMedArticle(client *literature.Client, pmid string) IOE.IOEither[error, *literature.Article] {
+func fetchPubMedArticle(
+	client *literature.Client,
+	pmid string,
+) IOE.IOEither[error, *literature.Article] {
 	return IOE.TryCatchError(func() (*literature.Article, error) {
 		return client.GetArticle(pmid)
 	})
 }
 
-func downloadEuropePDF(client *literature.EuropePMCClient, pmid, customName string) IOE.IOEither[error, string] {
+func downloadEuropePDF(
+	client *literature.EuropePMCClient,
+	pmid, customName string,
+) IOE.IOEither[error, string] {
 	return IOE.TryCatchError(func() (string, error) {
 		urls, err := client.GetPDFURLs(pmid)
 		if err != nil {
@@ -195,7 +289,10 @@ func downloadEuropePDF(client *literature.EuropePMCClient, pmid, customName stri
 	})
 }
 
-func downloadPubMedPDF(client *literature.Client, pmid, customName string) IOE.IOEither[error, any] {
+func downloadPubMedPDF(
+	client *literature.Client,
+	pmid, customName string,
+) IOE.IOEither[error, any] {
 	return IOE.TryCatchError(func() (any, error) {
 		fmt.Println("Checking PDF availability in PubMed...")
 		hasPDF, err := client.HasPDF(pmid)
@@ -211,7 +308,10 @@ func downloadPubMedPDF(client *literature.Client, pmid, customName string) IOE.I
 		fmt.Printf("Downloading PDF from PubMed to %s...\n", filename)
 		err = client.DownloadPDF(pmid, filename)
 		if err != nil {
-			return nil, fmt.Errorf("failed to download PDF from PubMed: %w", err)
+			return nil, fmt.Errorf(
+				"failed to download PDF from PubMed: %w",
+				err,
+			)
 		}
 		fmt.Println("PDF downloaded successfully.")
 		return nil, nil
@@ -220,7 +320,9 @@ func downloadPubMedPDF(client *literature.Client, pmid, customName string) IOE.I
 
 // --- Utilities ---
 
-func printEuropeDetails(article *literature.EuropePMCArticle) IOE.IOEither[error, *literature.EuropePMCArticle] {
+func printEuropeDetails(
+	article *literature.EuropePMCArticle,
+) IOE.IOEither[error, *literature.EuropePMCArticle] {
 	return IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
 		fmt.Println("\n=== Article Details (EuropePMC) ===")
 		fmt.Printf("Title:    %s\n", article.Title)
@@ -242,7 +344,9 @@ func printEuropeDetails(article *literature.EuropePMCArticle) IOE.IOEither[error
 	})
 }
 
-func printPubMedDetails(article *literature.Article) IOE.IOEither[error, *literature.Article] {
+func printPubMedDetails(
+	article *literature.Article,
+) IOE.IOEither[error, *literature.Article] {
 	return IOE.TryCatchError(func() (*literature.Article, error) {
 		fmt.Println("\n=== Article Details (PubMed) ===")
 		fmt.Printf("Title:    %s\n", article.Title)
@@ -298,7 +402,7 @@ func downloadFile(url, filepath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
 	}
-	
+
 	fmt.Printf("PDF saved to: %s\n", filepath)
 	return nil
 }
