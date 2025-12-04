@@ -105,7 +105,7 @@ func fetchAndProcess(
 	// EuropePMC Flow
 	europeFlow := F.Pipe2(
 		IOE.Of[error](ctx),
-		IOE.Chain(fetchEuropeArticle(ctx.Identifier)),
+		IOE.Chain(fetchEuropeArticle),
 		IOE.Chain(processEuropeArticle(ctx)),
 	)
 
@@ -120,7 +120,7 @@ func fetchAndProcess(
 					"Not found in EuropePMC. Trying PubMed...",
 				),
 			),
-			IOE.Chain(resolvePMID(ctx.Identifier)),
+			IOE.Chain(resolvePMID),
 			IOE.Chain(processPubMedFlow(ctx)),
 		)
 	}
@@ -303,45 +303,43 @@ func logPubMedArticle(
 	}
 }
 
-var fetchEuropeArticle = F.Curry2(
-	func(identifier string, ctx WithPubMedClient) IOE.IOEither[error, *literature.EuropePMCArticle] {
-		return IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
-			ctx.Logger.Info("Checking EuropePMC...")
-			isDOI := strings.Contains(identifier, "/") ||
-				strings.HasPrefix(identifier, "10.")
-			if isDOI {
-				return ctx.Europe.GetArticleByDOI(identifier)
-			}
-			return ctx.Europe.GetArticle(identifier)
-		})
-	},
-)
+func fetchEuropeArticle(
+	ctx WithPubMedClient,
+) IOE.IOEither[error, *literature.EuropePMCArticle] {
+	identifier := ctx.Identifier
+	return IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
+		isDOI := strings.Contains(identifier, "/") ||
+			strings.HasPrefix(identifier, "10.")
+		if isDOI {
+			return ctx.Europe.GetArticleByDOI(identifier)
+		}
+		return ctx.Europe.GetArticle(identifier)
+	})
+}
 
-var resolvePMID = F.Curry2(
-	func(identifier string, ctx WithPubMedClient) IOE.IOEither[error, string] {
-		return IOE.TryCatchError(func() (string, error) {
-			isDOI := strings.Contains(identifier, "/") ||
-				strings.HasPrefix(identifier, "10.")
-			if !isDOI {
-				return identifier, nil
-			}
-			ctx.Logger.Info("Resolving DOI in PubMed...", "doi", identifier)
-			searchResults, err := ctx.PubMed.Search(identifier)
-			if err != nil || searchResults.Total == 0 {
-				return "", fmt.Errorf(
-					"article not found in PubMed via DOI: %s",
-					identifier,
-				)
-			}
-			if len(searchResults.Articles) > 0 {
-				return searchResults.Articles[0].PMID, nil
-			}
+func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
+	identifier := ctx.Identifier
+	return IOE.TryCatchError(func() (string, error) {
+		isDOI := strings.Contains(identifier, "/") ||
+			strings.HasPrefix(identifier, "10.")
+		if !isDOI {
+			return identifier, nil
+		}
+		searchResults, err := ctx.PubMed.Search(identifier)
+		if err != nil || searchResults.Total == 0 {
 			return "", fmt.Errorf(
-				"DOI resolved but no article details returned",
+				"article not found in PubMed via DOI: %s",
+				identifier,
 			)
-		})
-	},
-)
+		}
+		if len(searchResults.Articles) > 0 {
+			return searchResults.Articles[0].PMID, nil
+		}
+		return "", fmt.Errorf(
+			"DOI resolved but no article details returned",
+		)
+	})
+}
 
 var fetchPubMedArticle = F.Curry2(
 	func(pmid string, ctx WithPubMedClient) IOE.IOEither[error, *literature.Article] {
