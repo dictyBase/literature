@@ -51,6 +51,15 @@ var (
 			return WithPubMedClient{WithEuropeClient: ctx, PubMed: epc}
 		},
 	)
+
+	logf = F.Curry2(
+		func(msg string, ctx WithPubMedClient) IO.IO[WithPubMedClient] {
+			return func() WithPubMedClient {
+				ctx.Logger.Print(msg)
+				return ctx
+			}
+		},
+	)
 )
 
 func main() {
@@ -117,11 +126,7 @@ func fetchAndProcess(
 		return F.Pipe3(
 			IOE.Of[error](ctx),
 			IOE.ChainFirstIOK[error](
-				IO.Logger[WithPubMedClient](
-					ctx.Logger,
-				)(
-					"Not found in EuropePMC. Trying PubMed...",
-				),
+				logf("Not found in EuropePMC. Trying PubMed..."),
 			),
 			IOE.Chain(resolvePMID),
 			IOE.Chain(processPubMedFlow(ctx)),
@@ -256,12 +261,7 @@ func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
 }
 
-func logInfo(ctx WithPubMedClient, msg string) IOE.IOEither[error, any] {
-	return IOE.Of[error, any](func() any {
-		ctx.Logger.Info(msg)
-		return nil
-	})
-}
+// logf creates a curried logging function for use in a pipeline.
 
 func logEuropeArticle(
 	ctx WithPubMedClient,
@@ -304,6 +304,14 @@ func logPubMedArticle(
 			},
 		)(IOE.Of[error](article))
 	}
+}
+
+func logNotFoundInEurope(ctx WithPubMedClient) IO.IO[WithPubMedClient] {
+	return IO.Logger[WithPubMedClient](
+		ctx.Logger,
+	)(
+		"Not found in EuropePMC. Trying PubMed...",
+	)(ctx)
 }
 
 func isDOI(ctx WithPubMedClient) bool {
