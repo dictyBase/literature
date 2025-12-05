@@ -105,10 +105,11 @@ func fetchAndProcess(
 	ctx WithPubMedClient,
 ) IOE.IOEither[error, any] {
 	// EuropePMC Flow
+	euroProcessor := processEuropeArticle(ctx)
 	europeFlow := F.Pipe2(
 		IOE.Of[error](ctx),
 		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
-		IOE.Chain(processEuropeArticle(ctx)),
+		IOE.Chain(euroProcessor),
 	)
 
 	// PubMed Flow (Fallback)
