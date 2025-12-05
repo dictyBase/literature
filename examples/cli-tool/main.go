@@ -135,7 +135,7 @@ func fetchAndProcess(
 		IOE.Chain(
 			F.Ternary(
 				hasEuropePDF,
-				handleEuropePDF(ctx),
+				downloadEuropePDF(ctx),
 				handleEuropeFallback(ctx),
 			),
 		),
@@ -155,40 +155,6 @@ func fetchAndProcess(
 
 	// Combine with Alt
 	return IOE.MonadAlt(europeFlow, pubMedFlow)
-}
-
-func handleEuropePDF(
-	ctx WithPubMedClient,
-) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		return F.Pipe1(
-			func() IOE.IOEither[error, any] {
-				if article.PMID == "" {
-					return logInfo(
-						ctx,
-						"Warning: No PMID, cannot reliably fetch PDF.",
-					)
-				}
-				downloadOp := downloadEuropePDF(
-					ctx.Europe,
-					article.PMID,
-					ctx.OutputFile,
-				)
-				return IOE.MonadMap(
-					downloadOp,
-					func(string) any { return nil },
-				)
-			}(),
-			IOE.ChainFirst(
-				func(_ any) IOE.IOEither[error, any] {
-					return logInfo(
-						ctx,
-						"PDF available via EuropePMC.",
-					)
-				},
-			),
-		)
-	}
 }
 
 func handleEuropeFallback(
@@ -355,22 +321,24 @@ var fetchPubMedArticle = F.Curry2(
 )
 
 func downloadEuropePDF(
-	client *literature.EuropePMCClient,
-	pmid, customName string,
-) IOE.IOEither[error, string] {
-	return IOE.TryCatchError(func() (string, error) {
-		urls, err := client.GetPDFURLs(pmid)
-		if err != nil {
-			return "", err
-		}
-		if len(urls) == 0 {
-			return "", fmt.Errorf("no PDF URLs returned")
-		}
-		pdfURL := urls[0].URL
-		fmt.Printf("Downloading PDF from EuropePMC: %s\n", pdfURL)
-		filename := getFilename(pmid, customName)
-		return filename, downloadFile(pdfURL, filename)
-	})
+	ctx WithPubMedClient,
+) func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
+	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
+		return IOE.TryCatchError(func() (any, error) {
+			urls, err := ctx.Europe.GetPDFURLs(article.PMID)
+			if err != nil {
+				return nil, err
+			}
+			pdfURL := urls[0].URL
+			ctx.Logger.Printf("Downloading PDF from EuropePMC: %s\n", pdfURL)
+			filename := getFilename(article.PMID, ctx.OutputFile)
+			if err := downloadFile(pdfURL, filename); err != nil {
+				return nil, err
+			}
+			ctx.Logger.Println("PDF available via EuropePMC.")
+			return nil, nil
+		})
+	}
 }
 
 func downloadPubMedPDF(
