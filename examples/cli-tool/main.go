@@ -344,33 +344,6 @@ func downloadEuropePDF(
 	}
 }
 
-func downloadPubMedPDF(
-	client *literature.Client,
-	pmid, customName string,
-) IOE.IOEither[error, any] {
-	return IOE.TryCatchError(func() (any, error) {
-		hasPDF, err := client.HasPDF(pmid)
-		if err != nil {
-			//nolint:nilerr // Not a fatal error for the CLI flow, just no PDF
-			return nil, nil
-		}
-		if !hasPDF {
-			return nil, nil
-		}
-		filename := getFilename(pmid, customName)
-		fmt.Printf("Downloading PDF from PubMed to %s...\n", filename)
-		err = client.DownloadPDF(pmid, filename)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to download PDF from PubMed: %w",
-				err,
-			)
-		}
-		fmt.Println("PDF downloaded successfully.")
-		return nil, nil
-	})
-}
-
 func getFilename(pmid, customName string) string {
 	if customName != "" {
 		return customName
@@ -406,4 +379,31 @@ func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 			)
 		}),
 	)
+}
+
+func downloadPubMedPDF(
+	client *literature.Client,
+	pmid, customName string,
+) IOE.IOEither[error, any] {
+	return IOE.TryCatchError(func() (any, error) {
+		hasPDF, err := client.HasPDF(pmid)
+		if err != nil {
+			//nolint:nilerr // Not a fatal error for the CLI flow, just no PDF
+			return nil, nil
+		}
+		if !hasPDF {
+			return nil, nil
+		}
+		filename := getFilename(pmid, customName)
+		fmt.Printf("Downloading PDF from PubMed to %s...\n", filename)
+		err = client.DownloadPDF(pmid, filename)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to download PDF from PubMed: %w",
+				err,
+			)
+		}
+		fmt.Println("PDF downloaded successfully.")
+		return nil, nil
+	})
 }
