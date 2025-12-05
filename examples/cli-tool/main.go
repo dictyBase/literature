@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	F "github.com/IBM/fp-go/v2/function"
 	IO "github.com/IBM/fp-go/v2/io"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
+	IOEF "github.com/IBM/fp-go/v2/ioeither/file"
+	IOEH "github.com/IBM/fp-go/v2/ioeither/http"
 	P "github.com/IBM/fp-go/v2/predicate"
 	S "github.com/IBM/fp-go/v2/string"
 	"github.com/dictybase/literature"
@@ -235,6 +236,12 @@ func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
 }
 
+func logInfo(ctx WithPubMedClient, msg string) IOE.IOEither[error, any] {
+	return IOE.FromImpure[error](func() {
+		ctx.Logger.Println(msg)
+	})
+}
+
 func logPubMedArticle(
 	ctx WithPubMedClient,
 ) func(*literature.Article) IOE.IOEither[error, *literature.Article] {
@@ -242,7 +249,7 @@ func logPubMedArticle(
 		return IOE.ChainFirst(
 			func(article *literature.Article) IOE.IOEither[error, any] {
 				return IOE.Of[error, any](func() any {
-					ctx.Logger.Info(
+					ctx.Logger.Println(
 						"Article Details (PubMed)",
 						"title", article.Title,
 						"pmid", article.PMID,
@@ -253,14 +260,6 @@ func logPubMedArticle(
 			},
 		)(IOE.Of[error](article))
 	}
-}
-
-func logNotFoundInEurope(ctx WithPubMedClient) IO.IO[WithPubMedClient] {
-	return IO.Logger[WithPubMedClient](
-		ctx.Logger,
-	)(
-		"Not found in EuropePMC. Trying PubMed...",
-	)(ctx)
 }
 
 func isDOI(ctx WithPubMedClient) bool {
@@ -324,20 +323,38 @@ func downloadEuropePDF(
 	ctx WithPubMedClient,
 ) func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		return IOE.TryCatchError(func() (any, error) {
-			urls, err := ctx.Europe.GetPDFURLs(article.PMID)
-			if err != nil {
-				return nil, err
-			}
-			pdfURL := urls[0].URL
-			ctx.Logger.Printf("Downloading PDF from EuropePMC: %s\n", pdfURL)
-			filename := getFilename(article.PMID, ctx.OutputFile)
-			if err := downloadFile(pdfURL, filename); err != nil {
-				return nil, err
-			}
-			ctx.Logger.Println("PDF available via EuropePMC.")
-			return nil, nil
-		})
+		// 1. Fetch URLs
+		fetchURLs := IOE.TryCatchError(
+			func() ([]literature.EuropePMCFullTextURL, error) {
+				return ctx.Europe.GetPDFURLs(article.PMID)
+			},
+		)
+
+		// 2. Pipeline
+		return F.Pipe1(
+			fetchURLs,
+			IOE.Chain(
+				func(urls []literature.EuropePMCFullTextURL) IOE.IOEither[error, any] {
+					pdfURL := urls[0].URL
+					filename := getFilename(article.PMID, ctx.OutputFile)
+					return F.Pipe2(
+						logInfo(
+							ctx,
+							fmt.Sprintf(
+								"Downloading PDF from EuropePMC: %s",
+								pdfURL,
+							),
+						),
+						IOE.Chain(func(_ any) IOE.IOEither[error, []byte] {
+							return downloadPDF(pdfURL, filename)
+						}),
+						IOE.Chain(func(_ []byte) IOE.IOEither[error, any] {
+							return logInfo(ctx, "PDF available via EuropePMC.")
+						}),
+					)
+				},
+			),
+		)
 	}
 }
 
@@ -375,29 +392,11 @@ func getFilename(pmid, customName string) string {
 	return fmt.Sprintf("%s.pdf", pmid)
 }
 
-func downloadFile(url, filepath string) error {
-	// nosemgrep: go.lang.security.audit.net.http.request.http-request-variable-url
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to initiate download: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filepath, err)
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
-	}
-
-	fmt.Printf("PDF saved to: %s\n", filepath)
-	return nil
+func downloadPDF(url, destPath string) IOE.IOEither[error, []byte] {
+	return F.Pipe3(
+		url,
+		IOEH.MakeGetRequest,
+		IOEH.ReadAll(IOEH.MakeClient(http.DefaultClient)),
+		IOE.Chain(IOEF.WriteFile(destPath, 0644)),
+	)
 }
