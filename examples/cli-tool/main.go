@@ -37,6 +37,15 @@ type WithPubMedClient struct {
 	PubMed *literature.Client
 }
 
+type DownloadContext struct {
+	WithPubMedClient
+	Article    *literature.EuropePMCArticle
+	PDFURL     string
+	TargetFile string
+}
+
+type DownloadFlow = func(*literature.EuropePMCArticle) IOE.IOEither[error, any]
+
 var (
 	// SetEuropeClient sets the EuropePMC client in the context.
 	SetEuropeClient = F.Curry2(
@@ -321,39 +330,16 @@ var fetchPubMedArticle = F.Curry2(
 
 func downloadEuropePDF(
 	ctx WithPubMedClient,
-) func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
+) DownloadFlow {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		// 1. Fetch URLs
-		fetchURLs := IOE.TryCatchError(
-			func() ([]literature.EuropePMCFullTextURL, error) {
-				return ctx.Europe.GetPDFURLs(article.PMID)
-			},
-		)
-
-		// 2. Pipeline
-		return F.Pipe1(
-			fetchURLs,
-			IOE.Chain(
-				func(urls []literature.EuropePMCFullTextURL) IOE.IOEither[error, any] {
-					pdfURL := urls[0].URL
-					filename := getFilename(article.PMID, ctx.OutputFile)
-					return F.Pipe2(
-						logInfo(
-							ctx,
-							fmt.Sprintf(
-								"Downloading PDF from EuropePMC: %s",
-								pdfURL,
-							),
-						),
-						IOE.Chain(func(_ any) IOE.IOEither[error, []byte] {
-							return downloadPDF(pdfURL, filename)
-						}),
-						IOE.Chain(func(_ []byte) IOE.IOEither[error, any] {
-							return logInfo(ctx, "PDF available via EuropePMC.")
-						}),
-					)
-				},
+		return F.Pipe4(
+			IOE.Of[error](
+				DownloadContext{WithPubMedClient: ctx, Article: article},
 			),
+			IOE.Chain(getPDFURLs),
+			IOE.Map[error](setTargetFilename),
+			IOE.Chain(downloadPDF),
+			IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
 		)
 	}
 }
@@ -392,11 +378,32 @@ func getFilename(pmid, customName string) string {
 	return fmt.Sprintf("%s.pdf", pmid)
 }
 
-func downloadPDF(url, destPath string) IOE.IOEither[error, []byte] {
+func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
+	return IOE.TryCatchError(func() (DownloadContext, error) {
+		urls, err := ctx.Europe.GetPDFURLs(ctx.Article.PMID)
+		if err != nil {
+			return ctx, err
+		}
+		ctx.PDFURL = urls[0].URL
+		return ctx, nil
+	})
+}
+
+func setTargetFilename(ctx DownloadContext) DownloadContext {
+	ctx.TargetFile = getFilename(ctx.Article.PMID, ctx.OutputFile)
+	return ctx
+}
+
+func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 	return F.Pipe3(
-		url,
+		ctx.PDFURL,
 		IOEH.MakeGetRequest,
 		IOEH.ReadAll(IOEH.MakeClient(http.DefaultClient)),
-		IOE.Chain(IOEF.WriteFile(destPath, 0644)),
+		IOE.Chain(func(data []byte) IOE.IOEither[error, DownloadContext] {
+			return F.Pipe1(
+				IOEF.WriteFile(ctx.TargetFile, 0644)(data),
+				IOE.Map[error](F.Constant1[[]byte](ctx)),
+			)
+		}),
 	)
 }
