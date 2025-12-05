@@ -12,6 +12,8 @@ import (
 	F "github.com/IBM/fp-go/v2/function"
 	IO "github.com/IBM/fp-go/v2/io"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
+	P "github.com/IBM/fp-go/v2/predicate"
+	S "github.com/IBM/fp-go/v2/string"
 	"github.com/dictybase/literature"
 	"github.com/urfave/cli/v2"
 )
@@ -105,7 +107,7 @@ func fetchAndProcess(
 	// EuropePMC Flow
 	europeFlow := F.Pipe2(
 		IOE.Of[error](ctx),
-		IOE.Chain(fetchEuropeArticle),
+		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
 		IOE.Chain(processEuropeArticle(ctx)),
 	)
 
@@ -303,18 +305,31 @@ func logPubMedArticle(
 	}
 }
 
-func fetchEuropeArticle(
+func isDOI(ctx WithPubMedClient) bool {
+	return F.Pipe1(
+		ctx.Identifier,
+		P.Or(S.Includes("/"))(S.HasPrefix("10.")),
+	)
+}
+
+func europeByDOI(
 	ctx WithPubMedClient,
 ) IOE.IOEither[error, *literature.EuropePMCArticle] {
-	identifier := ctx.Identifier
-	return IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
-		isDOI := strings.Contains(identifier, "/") ||
-			strings.HasPrefix(identifier, "10.")
-		if isDOI {
-			return ctx.Europe.GetArticleByDOI(identifier)
-		}
-		return ctx.Europe.GetArticle(identifier)
-	})
+	return IOE.TryCatchError(
+		func() (*literature.EuropePMCArticle, error) {
+			return ctx.Europe.GetArticleByDOI(ctx.Identifier)
+		},
+	)
+}
+
+func europeByPMID(
+	ctx WithPubMedClient,
+) IOE.IOEither[error, *literature.EuropePMCArticle] {
+	return IOE.TryCatchError(
+		func() (*literature.EuropePMCArticle, error) {
+			return ctx.Europe.GetArticle(ctx.Identifier)
+		},
+	)
 }
 
 func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
