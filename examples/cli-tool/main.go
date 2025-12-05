@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	E "github.com/IBM/fp-go/v2/either"
 	F "github.com/IBM/fp-go/v2/function"
@@ -328,9 +327,7 @@ func europeByPMID(
 func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
 	identifier := ctx.Identifier
 	return IOE.TryCatchError(func() (string, error) {
-		isDOI := strings.Contains(identifier, "/") ||
-			strings.HasPrefix(identifier, "10.")
-		if !isDOI {
+		if !isDOI(ctx) {
 			return identifier, nil
 		}
 		searchResults, err := ctx.PubMed.Search(identifier)
