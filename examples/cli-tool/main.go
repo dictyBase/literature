@@ -52,7 +52,7 @@ var (
 		},
 	)
 
-	logf = F.Curry2(
+	pubClientLogger = F.Curry2(
 		func(msg string, ctx WithPubMedClient) IO.IO[WithPubMedClient] {
 			return func() WithPubMedClient {
 				ctx.Logger.Print(msg)
@@ -114,11 +114,17 @@ func fetchAndProcess(
 	ctx WithPubMedClient,
 ) IOE.IOEither[error, any] {
 	// EuropePMC Flow
-	euroProcessor := processEuropeArticle(ctx)
-	europeFlow := F.Pipe2(
+	europeFlow := F.Pipe3(
 		IOE.Of[error](ctx),
 		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
-		IOE.Chain(euroProcessor),
+		IOE.Chain(logEuropeArticle(ctx)),
+		IOE.Chain(
+			F.Ternary(
+				hasEuropePDF,
+				handleEuropePDF(ctx),
+				handleEuropeFallback(ctx),
+			),
+		),
 	)
 
 	// PubMed Flow (Fallback)
@@ -126,7 +132,7 @@ func fetchAndProcess(
 		return F.Pipe3(
 			IOE.Of[error](ctx),
 			IOE.ChainFirstIOK[error](
-				logf("Not found in EuropePMC. Trying PubMed..."),
+				pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
 			),
 			IOE.Chain(resolvePMID),
 			IOE.Chain(processPubMedFlow(ctx)),
@@ -137,57 +143,41 @@ func fetchAndProcess(
 	return IOE.MonadAlt(europeFlow, pubMedFlow)
 }
 
-func processEuropeArticle(
+func handleEuropePDF(
 	ctx WithPubMedClient,
 ) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
 		return F.Pipe1(
-			logEuropeArticle(ctx)(article),
-			IOE.Chain(
-				func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-					if article.HasPDF {
-						return F.Pipe1(
-							processEuropePDF(ctx)(article),
-							IOE.ChainFirst(
-								func(_ any) IOE.IOEither[error, any] {
-									return logInfo(
-										ctx,
-										"PDF available via EuropePMC.",
-									)
-								},
-							),
-						)
-					}
-					return processEuropeFallback(ctx)(article)
+			func() IOE.IOEither[error, any] {
+				if article.PMID == "" {
+					return logInfo(
+						ctx,
+						"Warning: No PMID, cannot reliably fetch PDF.",
+					)
+				}
+				downloadOp := downloadEuropePDF(
+					ctx.Europe,
+					article.PMID,
+					ctx.OutputFile,
+				)
+				return IOE.MonadMap(
+					downloadOp,
+					func(string) any { return nil },
+				)
+			}(),
+			IOE.ChainFirst(
+				func(_ any) IOE.IOEither[error, any] {
+					return logInfo(
+						ctx,
+						"PDF available via EuropePMC.",
+					)
 				},
 			),
 		)
 	}
 }
 
-func processEuropePDF(
-	ctx WithPubMedClient,
-) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		if article.PMID == "" {
-			return logInfo(
-				ctx,
-				"Warning: No PMID, cannot reliably fetch PDF.",
-			)
-		}
-		downloadOp := downloadEuropePDF(
-			ctx.Europe,
-			article.PMID,
-			ctx.OutputFile,
-		)
-		return IOE.MonadMap(
-			downloadOp,
-			func(string) any { return nil },
-		)
-	}
-}
-
-func processEuropeFallback(
+func handleEuropeFallback(
 	ctx WithPubMedClient,
 ) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
@@ -211,6 +201,10 @@ func processEuropeFallback(
 			}),
 		)
 	}
+}
+
+func hasEuropePDF(a *literature.EuropePMCArticle) bool {
+	return a.HasPDF
 }
 
 func processPubMedFlow(
@@ -260,8 +254,6 @@ func createPubMedClient(
 func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
 }
-
-// logf creates a curried logging function for use in a pipeline.
 
 func logEuropeArticle(
 	ctx WithPubMedClient,
