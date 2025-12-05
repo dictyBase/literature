@@ -60,6 +60,21 @@ var (
 			}
 		},
 	)
+
+	logEuropeArticle = F.Curry2(
+		func(ctx WithPubMedClient, article *literature.EuropePMCArticle) IO.IO[*literature.EuropePMCArticle] {
+			return func() *literature.EuropePMCArticle {
+				ctx.Logger.Println(
+					"Article Details (EuropePMC)",
+					"title", article.Title,
+					"authors", article.AuthorString,
+					"pmid", article.PMID,
+					"doi", article.DOI,
+				)
+				return nil
+			}
+		},
+	)
 )
 
 func main() {
@@ -117,7 +132,7 @@ func fetchAndProcess(
 	europeFlow := F.Pipe3(
 		IOE.Of[error](ctx),
 		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
-		IOE.Chain(logEuropeArticle(ctx)),
+		IOE.ChainFirstIOK[error](logEuropeArticle(ctx)),
 		IOE.Chain(
 			F.Ternary(
 				hasEuropePDF,
@@ -253,29 +268,6 @@ func createPubMedClient(
 
 func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
-}
-
-func logEuropeArticle(
-	ctx WithPubMedClient,
-) func(*literature.EuropePMCArticle) IOE.IOEither[error, *literature.EuropePMCArticle] {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, *literature.EuropePMCArticle] {
-		return IOE.ChainFirst(
-			func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-				return IOE.Of[error, any](func() any {
-					ctx.Logger.Info(
-						"Article Details (EuropePMC)",
-						"title", article.Title,
-						"authors", article.AuthorString,
-						"pmid", article.PMID,
-						"doi", article.DOI,
-					)
-					return nil
-				})
-			},
-		)(
-			IOE.Of[error](article),
-		)
-	}
 }
 
 func logPubMedArticle(
