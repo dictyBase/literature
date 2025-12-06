@@ -153,12 +153,13 @@ func fetchAndProcess(
 
 	// PubMed Flow (Fallback)
 	pubMedFlow := func() IOE.IOEither[error, any] {
-		return F.Pipe3(
+		return F.Pipe4(
 			IOE.Of[error](ctx),
 			IOE.ChainFirstIOK[error](
 				pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
 			),
-			IOE.Chain(resolvePMID),
+			IOE.Chain(fetchPubMedArticle),
+			IOE.ChainFirstIOK[error](logPubMedArticle(ctx)),
 			IOE.Chain(processPubMedFlow(ctx)),
 		)
 	}
@@ -173,34 +174,20 @@ func hasEuropePDF(a *literature.EuropePMCArticle) bool {
 
 func processPubMedFlow(
 	ctx WithPubMedClient,
-) func(string) IOE.IOEither[error, any] {
-	return func(pmid string) IOE.IOEither[error, any] {
-		return F.Pipe1(
-			fetchPubMedArticle(pmid)(ctx),
-			IOE.Chain(
-				func(article *literature.Article) IOE.IOEither[error, any] {
-					return F.Pipe1(
-						logPubMedArticle(ctx)(article),
-						IOE.Chain(
-							func(art *literature.Article) IOE.IOEither[error, any] {
-								return F.Pipe4(
-									IOE.Of[error](
-										DownloadContext{
-											WithPubMedClient: ctx,
-											PMID:             art.PMID,
-										},
-									),
-									IOE.Chain(checkPubMedAvailability),
-									IOE.Map[error](setTargetFilename),
-									IOE.Chain(downloadFromPubMed),
-									IOE.Map[error](
-										F.Constant1[DownloadContext, any](nil),
-									),
-								)
-							},
-						),
-					)
+) func(*literature.Article) IOE.IOEither[error, any] {
+	return func(article *literature.Article) IOE.IOEither[error, any] {
+		return F.Pipe4(
+			IOE.Of[error](
+				DownloadContext{
+					WithPubMedClient: ctx,
+					PMID:             article.PMID,
 				},
+			),
+			IOE.Chain(checkPubMedAvailability),
+			IOE.Map[error](setTargetFilename),
+			IOE.Chain(downloadFromPubMed),
+			IOE.Map[error](
+				F.Constant1[DownloadContext, any](nil),
 			),
 		)
 	}
@@ -228,25 +215,19 @@ func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
 }
 
-func logPubMedArticle(
-	ctx WithPubMedClient,
-) func(*literature.Article) IOE.IOEither[error, *literature.Article] {
-	return func(article *literature.Article) IOE.IOEither[error, *literature.Article] {
-		return IOE.ChainFirst(
-			func(article *literature.Article) IOE.IOEither[error, any] {
-				return IOE.Of[error, any](func() any {
-					ctx.Logger.Println(
-						"Article Details (PubMed)",
-						"title", article.Title,
-						"pmid", article.PMID,
-						"doi", article.DOI,
-					)
-					return nil
-				})
-			},
-		)(IOE.Of[error](article))
-	}
-}
+var logPubMedArticle = F.Curry2(
+	func(ctx WithPubMedClient, article *literature.Article) IO.IO[*literature.Article] {
+		return func() *literature.Article {
+			ctx.Logger.Println(
+				"Article Details (PubMed)",
+				"title", article.Title,
+				"pmid", article.PMID,
+				"doi", article.DOI,
+			)
+			return nil
+		}
+	},
+)
 
 func isDOI(ctx WithPubMedClient) bool {
 	return F.Pipe1(
@@ -275,61 +256,13 @@ func europeByPMID(
 	)
 }
 
-func searchPubMed(
+func fetchPubMedArticle(
 	ctx WithPubMedClient,
-) IOE.IOEither[error, *literature.SearchResult] {
-	return IOE.TryCatchError(
-		func() (*literature.SearchResult, error) {
-			return ctx.PubMed.Search(ctx.Identifier)
-		},
-	)
-}
-
-func extractFirstPMID(
-	result *literature.SearchResult,
-) IOE.IOEither[error, string] {
-	return IOE.TryCatchError(func() (string, error) {
-		if result.Total == 0 {
-			return "", fmt.Errorf("article not found in PubMed")
-		}
-		if len(result.Articles) > 0 {
-			return result.Articles[0].PMID, nil
-		}
-		return "", fmt.Errorf(
-			"DOI resolved but no article details returned",
-		)
+) IOE.IOEither[error, *literature.Article] {
+	return IOE.TryCatchError(func() (*literature.Article, error) {
+		return ctx.PubMed.GetArticle(ctx.Identifier)
 	})
 }
-
-func resolveDirectly(ctx WithPubMedClient) IOE.IOEither[error, string] {
-	return IOE.Of[error](ctx.Identifier)
-}
-
-var resolveFromPubMedSearch = F.Flow2(
-	searchPubMed,
-	IOE.Chain(extractFirstPMID),
-)
-
-func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
-	return F.Pipe1(
-		IOE.Of[error](ctx),
-		IOE.Chain(
-			F.Ternary(
-				isDOI,
-				resolveFromPubMedSearch,
-				resolveDirectly,
-			),
-		),
-	)
-}
-
-var fetchPubMedArticle = F.Curry2(
-	func(pmid string, ctx WithPubMedClient) IOE.IOEither[error, *literature.Article] {
-		return IOE.TryCatchError(func() (*literature.Article, error) {
-			return ctx.PubMed.GetArticle(pmid)
-		})
-	},
-)
 
 func downloadEuropePDF(
 	ctx WithPubMedClient,
