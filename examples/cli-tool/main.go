@@ -39,7 +39,7 @@ type WithPubMedClient struct {
 
 type DownloadContext struct {
 	WithPubMedClient
-	Article    *literature.EuropePMCArticle
+	PMID       string
 	PDFURL     string
 	TargetFile string
 }
@@ -146,7 +146,7 @@ func fetchAndProcess(
 			F.Ternary(
 				hasEuropePDF,
 				downloadEuropePDF(ctx),
-				handleEuropeFallback(ctx),
+				fallbackEurope(ctx),
 			),
 		),
 	)
@@ -167,32 +167,6 @@ func fetchAndProcess(
 	return IOE.MonadAlt(europeFlow, pubMedFlow)
 }
 
-func handleEuropeFallback(
-	ctx WithPubMedClient,
-) func(*literature.EuropePMCArticle) IOE.IOEither[error, any] {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		return F.Pipe1(
-			logInfo(
-				ctx,
-				"PDF NOT available via EuropePMC. Trying PubMed for PDF...",
-			),
-			IOE.Chain(func(_ any) IOE.IOEither[error, any] {
-				if article.PMID == "" {
-					return logInfo(
-						ctx,
-						"No PMID available to query PubMed for PDF.",
-					)
-				}
-				return downloadPubMedPDF(
-					ctx.PubMed,
-					article.PMID,
-					ctx.OutputFile,
-				)
-			}),
-		)
-	}
-}
-
 func hasEuropePDF(a *literature.EuropePMCArticle) bool {
 	return a.HasPDF
 }
@@ -209,10 +183,19 @@ func processPubMedFlow(
 						logPubMedArticle(ctx)(article),
 						IOE.Chain(
 							func(art *literature.Article) IOE.IOEither[error, any] {
-								return downloadPubMedPDF(
-									ctx.PubMed,
-									art.PMID,
-									ctx.OutputFile,
+								return F.Pipe4(
+									IOE.Of[error](
+										DownloadContext{
+											WithPubMedClient: ctx,
+											PMID:             art.PMID,
+										},
+									),
+									IOE.Chain(checkPubMedAvailability),
+									IOE.Map[error](setTargetFilename),
+									IOE.Chain(downloadFromPubMed),
+									IOE.Map[error](
+										F.Constant1[DownloadContext, any](nil),
+									),
 								)
 							},
 						),
@@ -243,12 +226,6 @@ func createPubMedClient(
 
 func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
-}
-
-func logInfo(ctx WithPubMedClient, msg string) IOE.IOEither[error, any] {
-	return IOE.FromImpure[error](func() {
-		ctx.Logger.Println(msg)
-	})
 }
 
 func logPubMedArticle(
@@ -334,7 +311,7 @@ func downloadEuropePDF(
 	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
 		return F.Pipe4(
 			IOE.Of[error](
-				DownloadContext{WithPubMedClient: ctx, Article: article},
+				DownloadContext{WithPubMedClient: ctx, PMID: article.PMID},
 			),
 			IOE.Chain(getPDFURLs),
 			IOE.Map[error](setTargetFilename),
@@ -353,7 +330,7 @@ func getFilename(pmid, customName string) string {
 
 func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 	return IOE.TryCatchError(func() (DownloadContext, error) {
-		urls, err := ctx.Europe.GetPDFURLs(ctx.Article.PMID)
+		urls, err := ctx.Europe.GetPDFURLs(ctx.PMID)
 		if err != nil {
 			return ctx, err
 		}
@@ -363,7 +340,7 @@ func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 }
 
 func setTargetFilename(ctx DownloadContext) DownloadContext {
-	ctx.TargetFile = getFilename(ctx.Article.PMID, ctx.OutputFile)
+	ctx.TargetFile = getFilename(ctx.PMID, ctx.OutputFile)
 	return ctx
 }
 
@@ -381,29 +358,49 @@ func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 	)
 }
 
-func downloadPubMedPDF(
-	client *literature.Client,
-	pmid, customName string,
-) IOE.IOEither[error, any] {
-	return IOE.TryCatchError(func() (any, error) {
-		hasPDF, err := client.HasPDF(pmid)
+func checkPubMedAvailability(
+	ctx DownloadContext,
+) IOE.IOEither[error, DownloadContext] {
+	return IOE.TryCatchError(func() (DownloadContext, error) {
+		hasPDF, err := ctx.PubMed.HasPDF(ctx.PMID)
 		if err != nil {
-			//nolint:nilerr // Not a fatal error for the CLI flow, just no PDF
-			return nil, nil
+			return ctx, err
 		}
 		if !hasPDF {
-			return nil, nil
+			return ctx, fmt.Errorf("PDF not available in PubMed")
 		}
-		filename := getFilename(pmid, customName)
-		fmt.Printf("Downloading PDF from PubMed to %s...\n", filename)
-		err = client.DownloadPDF(pmid, filename)
+		return ctx, nil
+	})
+}
+
+func downloadFromPubMed(
+	ctx DownloadContext,
+) IOE.IOEither[error, DownloadContext] {
+	return IOE.TryCatchError(func() (DownloadContext, error) {
+		err := ctx.PubMed.DownloadPDF(ctx.PMID, ctx.TargetFile)
 		if err != nil {
-			return nil, fmt.Errorf(
+			return ctx, fmt.Errorf(
 				"failed to download PDF from PubMed: %w",
 				err,
 			)
 		}
-		fmt.Println("PDF downloaded successfully.")
-		return nil, nil
+		return ctx, nil
 	})
+}
+
+func fallbackEurope(
+	ctx WithPubMedClient,
+) DownloadFlow {
+	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
+		return F.Pipe4(
+			IOE.Of[error](DownloadContext{
+				WithPubMedClient: ctx,
+				PMID:             article.PMID,
+			}),
+			IOE.Chain(checkPubMedAvailability),
+			IOE.Map[error](setTargetFilename),
+			IOE.Chain(downloadFromPubMed),
+			IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
+		)
+	}
 }
