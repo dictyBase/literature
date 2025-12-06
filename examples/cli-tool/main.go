@@ -84,6 +84,20 @@ var (
 			}
 		},
 	)
+
+	logPubMedArticle = F.Curry2(
+		func(ctx WithPubMedClient, article *literature.Article) IO.IO[*literature.Article] {
+			return func() *literature.Article {
+				ctx.Logger.Println(
+					"Article Details (PubMed)",
+					"title", article.Title,
+					"pmid", article.PMID,
+					"doi", article.DOI,
+				)
+				return nil
+			}
+		},
+	)
 )
 
 func main() {
@@ -214,20 +228,6 @@ func createPubMedClient(
 func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
 	return ioe()
 }
-
-var logPubMedArticle = F.Curry2(
-	func(ctx WithPubMedClient, article *literature.Article) IO.IO[*literature.Article] {
-		return func() *literature.Article {
-			ctx.Logger.Println(
-				"Article Details (PubMed)",
-				"title", article.Title,
-				"pmid", article.PMID,
-				"doi", article.DOI,
-			)
-			return nil
-		}
-	},
-)
 
 func isDOI(ctx WithPubMedClient) bool {
 	return F.Pipe1(
