@@ -275,26 +275,52 @@ func europeByPMID(
 	)
 }
 
-func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
-	identifier := ctx.Identifier
+func searchPubMed(
+	ctx WithPubMedClient,
+) IOE.IOEither[error, *literature.SearchResult] {
+	return IOE.TryCatchError(
+		func() (*literature.SearchResult, error) {
+			return ctx.PubMed.Search(ctx.Identifier)
+		},
+	)
+}
+
+func extractFirstPMID(
+	result *literature.SearchResult,
+) IOE.IOEither[error, string] {
 	return IOE.TryCatchError(func() (string, error) {
-		if !isDOI(ctx) {
-			return identifier, nil
+		if result.Total == 0 {
+			return "", fmt.Errorf("article not found in PubMed")
 		}
-		searchResults, err := ctx.PubMed.Search(identifier)
-		if err != nil || searchResults.Total == 0 {
-			return "", fmt.Errorf(
-				"article not found in PubMed via DOI: %s",
-				identifier,
-			)
-		}
-		if len(searchResults.Articles) > 0 {
-			return searchResults.Articles[0].PMID, nil
+		if len(result.Articles) > 0 {
+			return result.Articles[0].PMID, nil
 		}
 		return "", fmt.Errorf(
 			"DOI resolved but no article details returned",
 		)
 	})
+}
+
+func resolveDirectly(ctx WithPubMedClient) IOE.IOEither[error, string] {
+	return IOE.Of[error](ctx.Identifier)
+}
+
+var resolveFromPubMedSearch = F.Flow2(
+	searchPubMed,
+	IOE.Chain(extractFirstPMID),
+)
+
+func resolvePMID(ctx WithPubMedClient) IOE.IOEither[error, string] {
+	return F.Pipe1(
+		IOE.Of[error](ctx),
+		IOE.Chain(
+			F.Ternary(
+				isDOI,
+				resolveFromPubMedSearch,
+				resolveDirectly,
+			),
+		),
+	)
 }
 
 var fetchPubMedArticle = F.Curry2(

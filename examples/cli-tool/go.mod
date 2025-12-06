@@ -7,7 +7,7 @@ toolchain go1.24.9
 replace github.com/dictybase/literature => ../../
 
 require (
-	github.com/IBM/fp-go/v2 v2.0.0-20251204125025-ff48d8953e6a
+	github.com/IBM/fp-go/v2 v2.0.0-20251205203505-3f4b6292e494
 	github.com/dictybase/literature v0.0.0-00010101000000-000000000000
 	github.com/urfave/cli/v2 v2.27.7
 )
