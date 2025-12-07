@@ -29,7 +29,7 @@ func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 		IOEH.ReadAll(IOEH.MakeClient(http.DefaultClient)),
 		IOE.Chain(func(data []byte) IOE.IOEither[error, DownloadContext] {
 			return F.Pipe1(
-				IOEF.WriteFile(ctx.TargetFile, 0644)(data),
+				IOEF.WriteFile(ctx.TargetFile, 0o644)(data),
 				IOE.Map[error](F.Constant1[[]byte](ctx)),
 			)
 		}),

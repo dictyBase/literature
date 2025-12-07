@@ -5,21 +5,23 @@ import (
 
 	F "github.com/IBM/fp-go/v2/function"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
+	"github.com/dictybase/literature"
 )
 
 func fetchPubMedArticle(
 	ctx WithPubMedClient,
 ) IOE.IOEither[error, WithPubMedArticle] {
-	return IOE.TryCatchError(func() (WithPubMedArticle, error) {
-		article, err := ctx.PubMed.GetArticle(ctx.Identifier)
-		if err != nil {
-			return WithPubMedArticle{}, err
-		}
-		return WithPubMedArticle{
-			WithPubMedClient: ctx,
-			Article:          article,
-		}, nil
-	})
+	return F.Pipe1(
+		IOE.TryCatchError(func() (*literature.Article, error) {
+			return ctx.PubMed.GetArticle(ctx.Identifier)
+		}),
+		IOE.Map[error](func(a *literature.Article) WithPubMedArticle {
+			return WithPubMedArticle{
+				WithPubMedClient: ctx,
+				Article:          a,
+			}
+		}),
+	)
 }
 
 func processPubMedFlow(
