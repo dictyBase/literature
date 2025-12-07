@@ -50,11 +50,13 @@ linters:
     - wastedassign
     - whitespace
   settings:
+    gomoddirectives:
+      replace-local: true
+      replace-allow-list:
+        - github.com/dictybase/literature
     gosec:
       excludes:
         - G404
-    lll:
-      line-length: 130
     paralleltest:
       ignore-missing-subtests: true
     revive:
@@ -77,8 +79,8 @@ linters:
       - examples$
 formatters:
   enable:
-    - gci
-    - gofmt
+    - golines
+    - gofumpt
     - goimports
   exclusions:
     generated: lax
