@@ -17,7 +17,10 @@ func europeByDOI(
 		),
 		IOE.Map[error](
 			func(a *literature.EuropePMCArticle) WithEuropePMCArticle {
-				return WithEuropePMCArticle{WithPubMedClient: ctx, Article: a}
+				return WithEuropePMCArticle{
+					WithPubMedClient: ctx,
+					Article:          a,
+				}
 			},
 		),
 	)
@@ -34,7 +37,10 @@ func europeByPMID(
 		),
 		IOE.Map[error](
 			func(a *literature.EuropePMCArticle) WithEuropePMCArticle {
-				return WithEuropePMCArticle{WithPubMedClient: ctx, Article: a}
+				return WithEuropePMCArticle{
+					WithPubMedClient: ctx,
+					Article:          a,
+				}
 			},
 		),
 	)
@@ -45,14 +51,17 @@ func hasEuropePDF(ctx WithEuropePMCArticle) bool {
 }
 
 func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		urls, err := ctx.Europe.GetPDFURLs(ctx.PMID)
-		if err != nil {
-			return ctx, err
-		}
-		ctx.PDFURL = urls[0].URL
-		return ctx, nil
-	})
+	return F.Pipe1(
+		IOE.TryCatchError(func() ([]literature.EuropePMCFullTextURL, error) {
+			return ctx.Europe.GetPDFURLs(ctx.PMID)
+		}),
+		IOE.Map[error](
+			func(urls []literature.EuropePMCFullTextURL) DownloadContext {
+				ctx.PDFURL = urls[0].URL
+				return ctx
+			},
+		),
+	)
 }
 
 func downloadEuropePDF(
