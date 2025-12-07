@@ -37,6 +37,11 @@ type WithPubMedClient struct {
 	PubMed *literature.Client
 }
 
+type WithPubMedArticle struct {
+	WithPubMedClient
+	Article *literature.Article
+}
+
 type DownloadContext struct {
 	WithPubMedClient
 	PMID       string
@@ -85,19 +90,17 @@ var (
 		},
 	)
 
-	logPubMedArticle = F.Curry2(
-		func(ctx WithPubMedClient, article *literature.Article) IO.IO[*literature.Article] {
-			return func() *literature.Article {
-				ctx.Logger.Println(
-					"Article Details (PubMed)",
-					"title", article.Title,
-					"pmid", article.PMID,
-					"doi", article.DOI,
-				)
-				return nil
-			}
-		},
-	)
+	logPubMedArticle = func(ctx WithPubMedArticle) IO.IO[WithPubMedArticle] {
+		return func() WithPubMedArticle {
+			ctx.Logger.Println(
+				"Article Details (PubMed)",
+				"title", ctx.Article.Title,
+				"pmid", ctx.Article.PMID,
+				"doi", ctx.Article.DOI,
+			)
+			return ctx
+		}
+	}
 )
 
 func main() {
@@ -173,8 +176,8 @@ func fetchAndProcess(
 				pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
 			),
 			IOE.Chain(fetchPubMedArticle),
-			IOE.ChainFirstIOK[error](logPubMedArticle(ctx)),
-			IOE.Chain(processPubMedFlow(ctx)),
+			IOE.ChainFirstIOK[error](logPubMedArticle),
+			IOE.Chain(processPubMedFlow),
 		)
 	}
 
@@ -187,24 +190,22 @@ func hasEuropePDF(a *literature.EuropePMCArticle) bool {
 }
 
 func processPubMedFlow(
-	ctx WithPubMedClient,
-) func(*literature.Article) IOE.IOEither[error, any] {
-	return func(article *literature.Article) IOE.IOEither[error, any] {
-		return F.Pipe4(
-			IOE.Of[error](
-				DownloadContext{
-					WithPubMedClient: ctx,
-					PMID:             article.PMID,
-				},
-			),
-			IOE.Chain(checkPubMedAvailability),
-			IOE.Map[error](setTargetFilename),
-			IOE.Chain(downloadFromPubMed),
-			IOE.Map[error](
-				F.Constant1[DownloadContext, any](nil),
-			),
-		)
-	}
+	ctx WithPubMedArticle,
+) IOE.IOEither[error, any] {
+	return F.Pipe4(
+		IOE.Of[error](
+			DownloadContext{
+				WithPubMedClient: ctx.WithPubMedClient,
+				PMID:             ctx.Article.PMID,
+			},
+		),
+		IOE.Chain(checkPubMedAvailability),
+		IOE.Map[error](setTargetFilename),
+		IOE.Chain(downloadFromPubMed),
+		IOE.Map[error](
+			F.Constant1[DownloadContext, any](nil),
+		),
+	)
 }
 
 // --- Wrappers ---
@@ -258,9 +259,16 @@ func europeByPMID(
 
 func fetchPubMedArticle(
 	ctx WithPubMedClient,
-) IOE.IOEither[error, *literature.Article] {
-	return IOE.TryCatchError(func() (*literature.Article, error) {
-		return ctx.PubMed.GetArticle(ctx.Identifier)
+) IOE.IOEither[error, WithPubMedArticle] {
+	return IOE.TryCatchError(func() (WithPubMedArticle, error) {
+		article, err := ctx.PubMed.GetArticle(ctx.Identifier)
+		if err != nil {
+			return WithPubMedArticle{}, err
+		}
+		return WithPubMedArticle{
+			WithPubMedClient: ctx,
+			Article:          article,
+		}, nil
 	})
 }
 
