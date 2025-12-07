@@ -16,3 +16,4 @@ examples/basic/basic-example
 examples/advanced/advanced-example
 examples/cli-tool/lit-cli
 main
+examples/cli-tool/cli-tool
