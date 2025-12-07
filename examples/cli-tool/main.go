@@ -1,107 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	E "github.com/IBM/fp-go/v2/either"
 	F "github.com/IBM/fp-go/v2/function"
-	IO "github.com/IBM/fp-go/v2/io"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
-	IOEF "github.com/IBM/fp-go/v2/ioeither/file"
-	IOEH "github.com/IBM/fp-go/v2/ioeither/http"
-	P "github.com/IBM/fp-go/v2/predicate"
 	RIE "github.com/IBM/fp-go/v2/readerioeither"
 	S "github.com/IBM/fp-go/v2/string"
-	"github.com/dictybase/literature"
 	"github.com/urfave/cli/v2"
-)
-
-// Context is the base context for the CLI tool.
-type Context struct {
-	Identifier string
-	OutputFile string
-	Logger     *log.Logger
-}
-
-// WithEuropeClient adds the EuropePMC client to the context.
-type WithEuropeClient struct {
-	Context
-	Europe *literature.EuropePMCClient
-}
-
-// WithPubMedClient adds the PubMed client to the context.
-type WithPubMedClient struct {
-	WithEuropeClient
-	PubMed *literature.Client
-}
-
-type WithPubMedArticle struct {
-	WithPubMedClient
-	Article *literature.Article
-}
-
-type DownloadContext struct {
-	WithPubMedClient
-	PMID       string
-	PDFURL     string
-	TargetFile string
-}
-
-type DownloadFlow = func(*literature.EuropePMCArticle) IOE.IOEither[error, any]
-
-var (
-	// SetEuropeClient sets the EuropePMC client in the context.
-	SetEuropeClient = F.Curry2(
-		func(epc *literature.EuropePMCClient, ctx Context) WithEuropeClient {
-			return WithEuropeClient{Context: ctx, Europe: epc}
-		},
-	)
-
-	// SetPubMedClient sets the PubMed client in the context.
-	SetPubMedClient = F.Curry2(
-		func(epc *literature.Client, ctx WithEuropeClient) WithPubMedClient {
-			return WithPubMedClient{WithEuropeClient: ctx, PubMed: epc}
-		},
-	)
-
-	pubClientLogger = F.Curry2(
-		func(msg string, ctx WithPubMedClient) IO.IO[WithPubMedClient] {
-			return func() WithPubMedClient {
-				ctx.Logger.Print(msg)
-				return ctx
-			}
-		},
-	)
-
-	logEuropeArticle = F.Curry2(
-		func(ctx WithPubMedClient, article *literature.EuropePMCArticle) IO.IO[*literature.EuropePMCArticle] {
-			return func() *literature.EuropePMCArticle {
-				ctx.Logger.Println(
-					"Article Details (EuropePMC)",
-					"title", article.Title,
-					"authors", article.AuthorString,
-					"pmid", article.PMID,
-					"doi", article.DOI,
-				)
-				return nil
-			}
-		},
-	)
-
-	logPubMedArticle = func(ctx WithPubMedArticle) IO.IO[WithPubMedArticle] {
-		return func() WithPubMedArticle {
-			ctx.Logger.Println(
-				"Article Details (PubMed)",
-				"title", ctx.Article.Title,
-				"pmid", ctx.Article.PMID,
-				"doi", ctx.Article.DOI,
-			)
-			return ctx
-		}
-	}
 )
 
 func main() {
@@ -135,18 +43,18 @@ func run(ctx *cli.Context) error {
 
 	// Construct the program
 	return F.Pipe5(
-		IOE.Do[error](Context{
+		IOE.Do[error](RunContext{
 			Identifier: identifier,
 			OutputFile: ctx.String("output"),
 			Logger:     logger,
 		}),
-		IOE.Bind(SetEuropeClient, createEuropeClient),
-		IOE.Bind(SetPubMedClient, createPubMedClient),
+		IOE.Bind(InjectEuropeClient, createEuropeClient),
+		IOE.Bind(InjectPubMedClient, createPubMedClient),
 		IOE.Chain(
 			RIE.MonadAlt(
-				europeStrategy,
+				ExecuteEuropeFlow,
 				func() RIE.ReaderIOEither[WithPubMedClient, error, any] {
-					return pubMedStrategy
+					return ExecutePubMedFlow
 				},
 			),
 		),
@@ -156,222 +64,4 @@ func run(ctx *cli.Context) error {
 			F.Constant1[any, error](nil),
 		),
 	)
-}
-
-func europeStrategy(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, any] {
-	return F.Pipe3(
-		IOE.Of[error](ctx),
-		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
-		IOE.ChainFirstIOK[error](logEuropeArticle(ctx)),
-		IOE.Chain(
-			F.Ternary(
-				hasEuropePDF,
-				downloadEuropePDF(ctx),
-				fallbackEurope(ctx),
-			),
-		),
-	)
-}
-
-func pubMedStrategy(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, any] {
-	return F.Pipe4(
-		IOE.Of[error](ctx),
-		IOE.ChainFirstIOK[error](
-			pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
-		),
-		IOE.Chain(fetchPubMedArticle),
-		IOE.ChainFirstIOK[error](logPubMedArticle),
-		IOE.Chain(processPubMedFlow),
-	)
-}
-
-func hasEuropePDF(a *literature.EuropePMCArticle) bool {
-	return a.HasPDF
-}
-
-func processPubMedFlow(
-	ctx WithPubMedArticle,
-) IOE.IOEither[error, any] {
-	return F.Pipe4(
-		IOE.Of[error](
-			DownloadContext{
-				WithPubMedClient: ctx.WithPubMedClient,
-				PMID:             ctx.Article.PMID,
-			},
-		),
-		IOE.Chain(checkPubMedAvailability),
-		IOE.Map[error](setTargetFilename),
-		IOE.Chain(downloadFromPubMed),
-		IOE.Map[error](
-			F.Constant1[DownloadContext, any](nil),
-		),
-	)
-}
-
-// --- Wrappers ---
-
-func createEuropeClient(
-	_ Context,
-) IOE.IOEither[error, *literature.EuropePMCClient] {
-	return IOE.TryCatchError(func() (*literature.EuropePMCClient, error) {
-		return literature.NewEuropePMCClient()
-	})
-}
-
-func createPubMedClient(
-	_ WithEuropeClient,
-) IOE.IOEither[error, *literature.Client] {
-	return IOE.TryCatchError(func() (*literature.Client, error) {
-		return literature.New()
-	})
-}
-
-func ToEither[A any](ioe IOE.IOEither[error, A]) E.Either[error, A] {
-	return ioe()
-}
-
-func isDOI(ctx WithPubMedClient) bool {
-	return F.Pipe1(
-		ctx.Identifier,
-		P.Or(S.Includes("/"))(S.HasPrefix("10.")),
-	)
-}
-
-func europeByDOI(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, *literature.EuropePMCArticle] {
-	return IOE.TryCatchError(
-		func() (*literature.EuropePMCArticle, error) {
-			return ctx.Europe.GetArticleByDOI(ctx.Identifier)
-		},
-	)
-}
-
-func europeByPMID(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, *literature.EuropePMCArticle] {
-	return IOE.TryCatchError(
-		func() (*literature.EuropePMCArticle, error) {
-			return ctx.Europe.GetArticle(ctx.Identifier)
-		},
-	)
-}
-
-func fetchPubMedArticle(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, WithPubMedArticle] {
-	return IOE.TryCatchError(func() (WithPubMedArticle, error) {
-		article, err := ctx.PubMed.GetArticle(ctx.Identifier)
-		if err != nil {
-			return WithPubMedArticle{}, err
-		}
-		return WithPubMedArticle{
-			WithPubMedClient: ctx,
-			Article:          article,
-		}, nil
-	})
-}
-
-func downloadEuropePDF(
-	ctx WithPubMedClient,
-) DownloadFlow {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		return F.Pipe4(
-			IOE.Of[error](
-				DownloadContext{WithPubMedClient: ctx, PMID: article.PMID},
-			),
-			IOE.Chain(getPDFURLs),
-			IOE.Map[error](setTargetFilename),
-			IOE.Chain(downloadPDF),
-			IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
-		)
-	}
-}
-
-func getFilename(pmid, customName string) string {
-	if customName != "" {
-		return customName
-	}
-	return fmt.Sprintf("%s.pdf", pmid)
-}
-
-func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		urls, err := ctx.Europe.GetPDFURLs(ctx.PMID)
-		if err != nil {
-			return ctx, err
-		}
-		ctx.PDFURL = urls[0].URL
-		return ctx, nil
-	})
-}
-
-func setTargetFilename(ctx DownloadContext) DownloadContext {
-	ctx.TargetFile = getFilename(ctx.PMID, ctx.OutputFile)
-	return ctx
-}
-
-func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
-	return F.Pipe3(
-		ctx.PDFURL,
-		IOEH.MakeGetRequest,
-		IOEH.ReadAll(IOEH.MakeClient(http.DefaultClient)),
-		IOE.Chain(func(data []byte) IOE.IOEither[error, DownloadContext] {
-			return F.Pipe1(
-				IOEF.WriteFile(ctx.TargetFile, 0644)(data),
-				IOE.Map[error](F.Constant1[[]byte](ctx)),
-			)
-		}),
-	)
-}
-
-func checkPubMedAvailability(
-	ctx DownloadContext,
-) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		hasPDF, err := ctx.PubMed.HasPDF(ctx.PMID)
-		if err != nil {
-			return ctx, err
-		}
-		if !hasPDF {
-			return ctx, fmt.Errorf("PDF not available in PubMed")
-		}
-		return ctx, nil
-	})
-}
-
-func downloadFromPubMed(
-	ctx DownloadContext,
-) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		err := ctx.PubMed.DownloadPDF(ctx.PMID, ctx.TargetFile)
-		if err != nil {
-			return ctx, fmt.Errorf(
-				"failed to download PDF from PubMed: %w",
-				err,
-			)
-		}
-		return ctx, nil
-	})
-}
-
-func fallbackEurope(
-	ctx WithPubMedClient,
-) DownloadFlow {
-	return func(article *literature.EuropePMCArticle) IOE.IOEither[error, any] {
-		return F.Pipe4(
-			IOE.Of[error](DownloadContext{
-				WithPubMedClient: ctx,
-				PMID:             article.PMID,
-			}),
-			IOE.Chain(checkPubMedAvailability),
-			IOE.Map[error](setTargetFilename),
-			IOE.Chain(downloadFromPubMed),
-			IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
-		)
-	}
 }
