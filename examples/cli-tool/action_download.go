@@ -26,7 +26,7 @@ func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
 	return F.Pipe3(
 		ctx.PDFURL,
 		IOEH.MakeGetRequest,
-		IOEH.ReadAll(IOEH.MakeClient(http.DefaultClient)),
+		IOEH.ReadAll(F.Pipe1(http.DefaultClient, IOEH.MakeClient)),
 		IOE.Chain(func(data []byte) IOE.IOEither[error, DownloadContext] {
 			return F.Pipe1(
 				IOEF.WriteFile(ctx.TargetFile, 0o644)(data),
