@@ -13,6 +13,7 @@ import (
 	IOEF "github.com/IBM/fp-go/v2/ioeither/file"
 	IOEH "github.com/IBM/fp-go/v2/ioeither/http"
 	P "github.com/IBM/fp-go/v2/predicate"
+	RIE "github.com/IBM/fp-go/v2/readerioeither"
 	S "github.com/IBM/fp-go/v2/string"
 	"github.com/dictybase/literature"
 	"github.com/urfave/cli/v2"
@@ -124,11 +125,10 @@ func main() {
 
 func run(ctx *cli.Context) error {
 	identifier := ctx.Args().First()
-	if identifier == "" {
+	if S.IsEmpty(identifier) {
 		return cli.Exit("Please provide a PMID or DOI", 1)
 	}
 
-	outputFile := ctx.String("output")
 	logger := log.Default()
 	logger.SetOutput(os.Stderr)
 	logger.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
@@ -137,12 +137,19 @@ func run(ctx *cli.Context) error {
 	return F.Pipe5(
 		IOE.Do[error](Context{
 			Identifier: identifier,
-			OutputFile: outputFile,
+			OutputFile: ctx.String("output"),
 			Logger:     logger,
 		}),
 		IOE.Bind(SetEuropeClient, createEuropeClient),
 		IOE.Bind(SetPubMedClient, createPubMedClient),
-		IOE.Chain(fetchAndProcess),
+		IOE.Chain(
+			RIE.MonadAlt(
+				europeStrategy,
+				func() RIE.ReaderIOEither[WithPubMedClient, error, any] {
+					return pubMedStrategy
+				},
+			),
+		),
 		ToEither,
 		E.Fold(
 			F.Identity[error],
@@ -151,11 +158,10 @@ func run(ctx *cli.Context) error {
 	)
 }
 
-func fetchAndProcess(
+func europeStrategy(
 	ctx WithPubMedClient,
 ) IOE.IOEither[error, any] {
-	// EuropePMC Flow
-	europeFlow := F.Pipe3(
+	return F.Pipe3(
 		IOE.Of[error](ctx),
 		IOE.Chain(F.Ternary(isDOI, europeByDOI, europeByPMID)),
 		IOE.ChainFirstIOK[error](logEuropeArticle(ctx)),
@@ -167,22 +173,20 @@ func fetchAndProcess(
 			),
 		),
 	)
+}
 
-	// PubMed Flow (Fallback)
-	pubMedFlow := func() IOE.IOEither[error, any] {
-		return F.Pipe4(
-			IOE.Of[error](ctx),
-			IOE.ChainFirstIOK[error](
-				pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
-			),
-			IOE.Chain(fetchPubMedArticle),
-			IOE.ChainFirstIOK[error](logPubMedArticle),
-			IOE.Chain(processPubMedFlow),
-		)
-	}
-
-	// Combine with Alt
-	return IOE.MonadAlt(europeFlow, pubMedFlow)
+func pubMedStrategy(
+	ctx WithPubMedClient,
+) IOE.IOEither[error, any] {
+	return F.Pipe4(
+		IOE.Of[error](ctx),
+		IOE.ChainFirstIOK[error](
+			pubClientLogger("Not found in EuropePMC. Trying PubMed..."),
+		),
+		IOE.Chain(fetchPubMedArticle),
+		IOE.ChainFirstIOK[error](logPubMedArticle),
+		IOE.Chain(processPubMedFlow),
+	)
 }
 
 func hasEuropePDF(a *literature.EuropePMCArticle) bool {
