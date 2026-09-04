@@ -21,7 +21,7 @@ linters:
     - gocyclo
     - godot
     - gomoddirectives
-    - gomodguard
+    - gomodguard_v2
     - gosec
     - govet
     - grouper
