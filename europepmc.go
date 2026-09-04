@@ -88,16 +88,24 @@ func NewEuropePMCClient(opts ...EuropePMCOption) (*EuropePMCClient, error) {
 
 // GetArticle retrieves article metadata for the given PMID from EuropePMC.
 func (c *EuropePMCClient) GetArticle(pmid string) (*EuropePMCArticle, error) {
-	return c.fetchArticleWithValidation(pmid, identifierTypePMID, func() (*internal.EuropePMCAPIResponse, error) {
-		return c.europePMCService.FetchArticle(pmid)
-	})
+	return c.fetchArticleWithValidation(
+		pmid,
+		identifierTypePMID,
+		func() (*internal.EuropePMCAPIResponse, error) {
+			return c.europePMCService.FetchArticle(pmid)
+		},
+	)
 }
 
 // GetArticleByDOI retrieves article metadata for the given DOI from EuropePMC.
 func (c *EuropePMCClient) GetArticleByDOI(doi string) (*EuropePMCArticle, error) {
-	return c.fetchArticleWithValidation(doi, identifierTypeDOI, func() (*internal.EuropePMCAPIResponse, error) {
-		return c.europePMCService.FetchArticleByDOI(doi)
-	})
+	return c.fetchArticleWithValidation(
+		doi,
+		identifierTypeDOI,
+		func() (*internal.EuropePMCAPIResponse, error) {
+			return c.europePMCService.FetchArticleByDOI(doi)
+		},
+	)
 }
 
 // fetchArticleWithValidation is a helper function that handles the common logic

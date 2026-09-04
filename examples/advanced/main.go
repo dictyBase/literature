@@ -79,7 +79,11 @@ func main() {
 		if err != nil {
 			log.Printf("Error finding similar articles: %v", err)
 		} else {
-			fmt.Printf("Found %d similar articles to PMID %s:\n", len(similarArticles.Articles), pmids[0])
+			fmt.Printf(
+				"Found %d similar articles to PMID %s:\n",
+				len(similarArticles.Articles),
+				pmids[0],
+			)
 			for i, article := range similarArticles.Articles {
 				fmt.Printf("%d. %s\n", i+1, article.Title)
 			}
