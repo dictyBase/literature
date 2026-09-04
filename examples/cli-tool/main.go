@@ -7,20 +7,22 @@ import (
 	E "github.com/IBM/fp-go/v2/either"
 	F "github.com/IBM/fp-go/v2/function"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
-	RIE "github.com/IBM/fp-go/v2/readerioeither"
-	S "github.com/IBM/fp-go/v2/string"
+	"github.com/dictyBase/fp-go-loom/ioeitherutils"
 	"github.com/urfave/cli/v2"
 )
 
 func main() {
 	app := &cli.App{
-		Name:  "lit-cli",
-		Usage: "Fetch article metadata and download PDF (EuropePMC with PubMed fallback)",
+		Name:      "lit-cli",
+		Usage:     "Fetch article metadata and download PDF (EuropePMC with PubMed fallback)",
+		ArgsUsage: "<PMID|DOI>",
+		Description: "Fetch article metadata for a PubMed ID or DOI and download the\n" +
+			"PDF. Tries EuropePMC first, then falls back to PubMed.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "output",
 				Aliases: []string{"o"},
-				Usage:   "Output filename for PDF",
+				Usage:   "Output filename for PDF (default: <PMID>.pdf)",
 			},
 		},
 		Action: run,
@@ -32,36 +34,36 @@ func main() {
 }
 
 func run(ctx *cli.Context) error {
-	identifier := ctx.Args().First()
-	if S.IsEmpty(identifier) {
-		return cli.Exit("Please provide a PMID or DOI", 1)
-	}
-
 	logger := log.Default()
 	logger.SetOutput(os.Stderr)
 	logger.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	// Construct the program
-	return F.Pipe5(
-		IOE.Do[error](RunContext{
-			Identifier: identifier,
+	return F.Pipe6(
+		ActionInput{
+			Identifier: ctx.Args().First(),
 			OutputFile: ctx.String("output"),
 			Logger:     logger,
-		}),
-		IOE.Bind(InjectEuropeClient, createEuropeClient),
-		IOE.Bind(InjectPubMedClient, createPubMedClient),
-		IOE.Chain(
-			RIE.MonadAlt(
-				ExecuteEuropeFlow,
-				func() RIE.ReaderIOEither[WithPubMedClient, error, any] {
-					return ExecutePubMedFlow
-				},
-			),
+		},
+		seedState,
+		IOE.Bind(europeLens.Set, createEuropeClient),
+		IOE.Bind(pubMedLens.Set, createPubMedClient),
+		IOE.Chain(fetchAndDownload),
+		ioeitherutils.ToEither[error, State],
+		E.ToError[State],
+	)
+}
+
+func seedState(in ActionInput) IOE.IOEither[error, State] {
+	return F.Pipe2(
+		State{
+			Identifier: in.Identifier,
+			OutputFile: in.OutputFile,
+			Logger:     in.Logger,
+		},
+		E.FromPredicate(
+			hasIdentifier,
+			func(State) error { return cli.Exit("Please provide a PMID or DOI", 1) },
 		),
-		ToEither,
-		E.Fold(
-			F.Identity[error],
-			F.Constant1[any, error](nil),
-		),
+		IOE.FromEither[error, State],
 	)
 }
