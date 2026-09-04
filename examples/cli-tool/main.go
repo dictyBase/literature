@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -8,11 +9,11 @@ import (
 	F "github.com/IBM/fp-go/v2/function"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
 	"github.com/dictyBase/fp-go-loom/ioeitherutils"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
-	app := &cli.App{
+	cmd := &cli.Command{
 		Name:      "lit-cli",
 		Usage:     "Fetch article metadata and download PDF (EuropePMC with PubMed fallback)",
 		ArgsUsage: "<PMID|DOI>",
@@ -28,20 +29,20 @@ func main() {
 		Action: run,
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(ctx *cli.Context) error {
+func run(_ context.Context, cmd *cli.Command) error {
 	logger := log.Default()
 	logger.SetOutput(os.Stderr)
 	logger.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	return F.Pipe6(
 		ActionInput{
-			Identifier: ctx.Args().First(),
-			OutputFile: ctx.String("output"),
+			Identifier: cmd.Args().First(),
+			OutputFile: cmd.String("output"),
 			Logger:     logger,
 		},
 		seedState,
