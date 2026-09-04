@@ -57,8 +57,7 @@ func (s *PDFService) IsPDFAvailable(pmid string) (bool, error) {
 
 	info, err := s.findPDFDownloadInfo(pmid)
 	if err != nil {
-		var pdfErr *PDFError
-		if errors.As(err, &pdfErr) {
+		if pdfErr, ok := errors.AsType[*PDFError](err); ok {
 			switch pdfErr.Type {
 			case PDFErrorPMCIDNotFound, PDFErrorPDFNotAvailable:
 				return false, nil

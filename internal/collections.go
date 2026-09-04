@@ -68,10 +68,7 @@ func Partition[T any](slice []T, size int) [][]T {
 
 	var chunks [][]T
 	for i := 0; i < len(slice); i += size {
-		end := i + size
-		if end > len(slice) {
-			end = len(slice)
-		}
+		end := min(i+size, len(slice))
 		chunks = append(chunks, slice[i:end])
 	}
 
