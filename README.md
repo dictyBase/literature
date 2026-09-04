@@ -52,7 +52,7 @@ go get github.com/dictybase/literature
 ```
 
 **Requirements:**
-- Go 1.23.8 or later
+- Go 1.26 or later
 
 ## Quick Start
 
