@@ -19,17 +19,35 @@ func TestIsDOI(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.identifier, func(t *testing.T) {
 			t.Parallel()
-			ctx := WithPubMedClient{
-				WithEuropeClient: WithEuropeClient{
-					RunContext: RunContext{
-						Identifier: testCase.identifier,
-					},
-				},
-			}
-			assert.Equal(t, testCase.expected, isDOI(ctx))
+			st := State{Identifier: testCase.identifier}
+			assert.Equal(t, testCase.expected, isDOI(st))
+		})
+	}
+}
+
+func TestHasIdentifier(t *testing.T) {
+	t.Parallel()
+	assert.True(t, hasIdentifier(State{Identifier: "12345678"}))
+	assert.False(t, hasIdentifier(State{}))
+}
+
+func TestTargetFilename(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name     string
+		state    State
+		expected string
+	}{
+		{"custom output", State{PMID: "12345678", OutputFile: "paper.pdf"}, "paper.pdf"},
+		{"default from PMID", State{PMID: "12345678"}, "12345678.pdf"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, testCase.expected, targetFilename(testCase.state))
 		})
 	}
 }

@@ -7,36 +7,36 @@ import (
 
 var (
 	pubClientLogger = F.Curry2(
-		func(msg string, ctx WithPubMedClient) IO.IO[WithPubMedClient] {
-			return func() WithPubMedClient {
-				ctx.Logger.Print(msg)
-				return ctx
+		func(msg string, st State) IO.IO[State] {
+			return func() State {
+				st.Logger.Print(msg)
+				return st
 			}
 		},
 	)
 
-	logEuropeArticle = func(ctx WithEuropePMCArticle) IO.IO[WithEuropePMCArticle] {
-		return func() WithEuropePMCArticle {
-			ctx.Logger.Println(
+	logEuropeArticle = func(state State) IO.IO[State] {
+		return func() State {
+			state.Logger.Println(
 				"Article Details (EuropePMC)",
-				"title", ctx.Article.Title,
-				"authors", ctx.Article.AuthorString,
-				"pmid", ctx.Article.PMID,
-				"doi", ctx.Article.DOI,
+				"title", state.EuropeArticle.Title,
+				"authors", state.EuropeArticle.AuthorString,
+				"pmid", state.EuropeArticle.PMID,
+				"doi", state.EuropeArticle.DOI,
 			)
-			return ctx
+			return state
 		}
 	}
 
-	logPubMedArticle = func(ctx WithPubMedArticle) IO.IO[WithPubMedArticle] {
-		return func() WithPubMedArticle {
-			ctx.Logger.Println(
+	logPubMedArticle = func(state State) IO.IO[State] {
+		return func() State {
+			state.Logger.Println(
 				"Article Details (PubMed)",
-				"title", ctx.Article.Title,
-				"pmid", ctx.Article.PMID,
-				"doi", ctx.Article.DOI,
+				"title", state.PubMedArticle.Title,
+				"pmid", state.PubMedArticle.PMID,
+				"doi", state.PubMedArticle.DOI,
 			)
-			return ctx
+			return state
 		}
 	}
 )

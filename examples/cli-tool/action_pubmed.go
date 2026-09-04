@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	F "github.com/IBM/fp-go/v2/function"
@@ -8,67 +9,57 @@ import (
 	"github.com/dictybase/literature"
 )
 
-func fetchPubMedArticle(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, WithPubMedArticle] {
+var errPubMedPDFUnavailable = errors.New("PDF not available in PubMed")
+
+func fetchPubMedArticle(state State) IOE.IOEither[error, State] {
 	return F.Pipe1(
 		IOE.TryCatchError(func() (*literature.Article, error) {
-			return ctx.PubMed.GetArticle(ctx.Identifier)
+			return state.PubMed.GetArticle(state.Identifier)
 		}),
-		IOE.Map[error](func(a *literature.Article) WithPubMedArticle {
-			return WithPubMedArticle{
-				WithPubMedClient: ctx,
-				Article:          a,
-			}
+		IOE.Map[error](func(a *literature.Article) State {
+			return pubMedArticleLens.Set(a)(state)
 		}),
 	)
 }
 
-func processPubMedFlow(
-	ctx WithPubMedArticle,
-) IOE.IOEither[error, any] {
-	return F.Pipe4(
-		IOE.Of[error](
-			DownloadContext{
-				WithPubMedClient: ctx.WithPubMedClient,
-				PMID:             ctx.Article.PMID,
-			},
-		),
+func processPubMedFlow(st State) IOE.IOEither[error, State] {
+	return F.Pipe1(
+		pmidLens.Set(st.PubMedArticle.PMID)(st),
+		pubMedDownloadTail,
+	)
+}
+
+// pubMedDownloadTail is the shared PubMed availability-check + download
+// pipeline, reused by fallbackEurope and processPubMedFlow.
+func pubMedDownloadTail(st State) IOE.IOEither[error, State] {
+	return F.Pipe3(
+		IOE.Of[error](st),
 		IOE.Chain(checkPubMedAvailability),
-		IOE.Map[error](setTargetFilename),
+		IOE.Let[error](targetFileLens.Set, targetFilename),
 		IOE.Chain(downloadFromPubMed),
-		IOE.Map[error](
-			F.Constant1[DownloadContext, any](nil),
-		),
 	)
 }
 
-func checkPubMedAvailability(
-	ctx DownloadContext,
-) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		hasPDF, err := ctx.PubMed.HasPDF(ctx.PMID)
-		if err != nil {
-			return ctx, err
-		}
-		if !hasPDF {
-			return ctx, fmt.Errorf("PDF not available in PubMed")
-		}
-		return ctx, nil
-	})
+func checkPubMedAvailability(state State) IOE.IOEither[error, State] {
+	return F.Pipe2(
+		IOE.TryCatchError(func() (bool, error) {
+			return state.PubMed.HasPDF(state.PMID)
+		}),
+		IOE.FilterOrElse(
+			F.Identity[bool],
+			F.Constant1[bool](errPubMedPDFUnavailable),
+		),
+		IOE.Map[error](F.Constant1[bool](state)),
+	)
 }
 
-func downloadFromPubMed(
-	ctx DownloadContext,
-) IOE.IOEither[error, DownloadContext] {
-	return IOE.TryCatchError(func() (DownloadContext, error) {
-		err := ctx.PubMed.DownloadPDF(ctx.PMID, ctx.TargetFile)
-		if err != nil {
-			return ctx, fmt.Errorf(
-				"failed to download PDF from PubMed: %w",
-				err,
-			)
-		}
-		return ctx, nil
-	})
+func downloadFromPubMed(st State) IOE.IOEither[error, State] {
+	return F.Pipe1(
+		IOE.TryCatchError(func() (State, error) {
+			return st, st.PubMed.DownloadPDF(st.PMID, st.TargetFile)
+		}),
+		IOE.MapLeft[State](func(err error) error {
+			return fmt.Errorf("failed to download PDF from PubMed: %w", err)
+		}),
+	)
 }

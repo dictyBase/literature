@@ -8,29 +8,29 @@ import (
 	IOE "github.com/IBM/fp-go/v2/ioeither"
 	IOEF "github.com/IBM/fp-go/v2/ioeither/file"
 	IOEH "github.com/IBM/fp-go/v2/ioeither/http"
+	P "github.com/IBM/fp-go/v2/predicate"
+	S "github.com/IBM/fp-go/v2/string"
 )
 
-func getFilename(pmid, customName string) string {
-	if customName != "" {
-		return customName
-	}
-	return fmt.Sprintf("%s.pdf", pmid)
+func targetFilename(st State) string {
+	return F.Pipe1(
+		st.OutputFile,
+		P.Fold(
+			F.Constant1[string](fmt.Sprintf("%s.pdf", st.PMID)),
+			F.Identity[string],
+		)(S.IsNonEmpty),
+	)
 }
 
-func setTargetFilename(ctx DownloadContext) DownloadContext {
-	ctx.TargetFile = getFilename(ctx.PMID, ctx.OutputFile)
-	return ctx
-}
-
-func downloadPDF(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
+func downloadPDF(state State) IOE.IOEither[error, State] {
 	return F.Pipe3(
-		ctx.PDFURL,
+		state.PDFURL,
 		IOEH.MakeGetRequest,
 		IOEH.ReadAll(F.Pipe1(http.DefaultClient, IOEH.MakeClient)),
-		IOE.Chain(func(data []byte) IOE.IOEither[error, DownloadContext] {
+		IOE.Chain(func(data []byte) IOE.IOEither[error, State] {
 			return F.Pipe1(
-				IOEF.WriteFile(ctx.TargetFile, 0o644)(data),
-				IOE.Map[error](F.Constant1[[]byte](ctx)),
+				IOEF.WriteFile(state.TargetFile, 0o644)(data),
+				IOE.Map[error](F.Constant1[[]byte](state)),
 			)
 		}),
 	)

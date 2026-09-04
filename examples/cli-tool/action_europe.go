@@ -1,97 +1,73 @@
 package main
 
 import (
+	"fmt"
+
+	A "github.com/IBM/fp-go/v2/array"
+	E "github.com/IBM/fp-go/v2/either"
 	F "github.com/IBM/fp-go/v2/function"
 	IOE "github.com/IBM/fp-go/v2/ioeither"
 	"github.com/dictybase/literature"
 )
 
-func europeByDOI(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, WithEuropePMCArticle] {
+func europeArticleBy(
+	fetch func(*literature.EuropePMCClient, string) (*literature.EuropePMCArticle, error),
+	state State,
+) IOE.IOEither[error, State] {
 	return F.Pipe1(
-		IOE.TryCatchError(
-			func() (*literature.EuropePMCArticle, error) {
-				return ctx.Europe.GetArticleByDOI(ctx.Identifier)
-			},
-		),
-		IOE.Map[error](
-			func(a *literature.EuropePMCArticle) WithEuropePMCArticle {
-				return WithEuropePMCArticle{
-					WithPubMedClient: ctx,
-					Article:          a,
-				}
-			},
-		),
+		IOE.TryCatchError(func() (*literature.EuropePMCArticle, error) {
+			return fetch(state.Europe, state.Identifier)
+		}),
+		IOE.Map[error](func(a *literature.EuropePMCArticle) State {
+			return europeArticleLens.Set(a)(state)
+		}),
 	)
 }
 
-func europeByPMID(
-	ctx WithPubMedClient,
-) IOE.IOEither[error, WithEuropePMCArticle] {
-	return F.Pipe1(
-		IOE.TryCatchError(
-			func() (*literature.EuropePMCArticle, error) {
-				return ctx.Europe.GetArticle(ctx.Identifier)
-			},
-		),
-		IOE.Map[error](
-			func(a *literature.EuropePMCArticle) WithEuropePMCArticle {
-				return WithEuropePMCArticle{
-					WithPubMedClient: ctx,
-					Article:          a,
-				}
-			},
-		),
-	)
+func europeByDOI(st State) IOE.IOEither[error, State] {
+	return europeArticleBy((*literature.EuropePMCClient).GetArticleByDOI, st)
 }
 
-func hasEuropePDF(ctx WithEuropePMCArticle) bool {
-	return ctx.Article.HasPDF
+func europeByPMID(st State) IOE.IOEither[error, State] {
+	return europeArticleBy((*literature.EuropePMCClient).GetArticle, st)
 }
 
-func getPDFURLs(ctx DownloadContext) IOE.IOEither[error, DownloadContext] {
-	return F.Pipe1(
+func hasEuropePDF(st State) bool {
+	return st.EuropeArticle.HasPDF
+}
+
+func getPDFURLs(state State) IOE.IOEither[error, State] {
+	return F.Pipe3(
 		IOE.TryCatchError(func() ([]literature.EuropePMCFullTextURL, error) {
-			return ctx.Europe.GetPDFURLs(ctx.PMID)
+			return state.Europe.GetPDFURLs(state.PMID)
 		}),
-		IOE.Map[error](
-			func(urls []literature.EuropePMCFullTextURL) DownloadContext {
-				ctx.PDFURL = urls[0].URL
-				return ctx
-			},
-		),
+		IOE.MapLeft[[]literature.EuropePMCFullTextURL](func(err error) error {
+			return fmt.Errorf("fetch PDF URLs for PMID %s: %w", state.PMID, err)
+		}),
+		IOE.ChainEitherK(F.Flow2(
+			A.Head,
+			E.FromOption[literature.EuropePMCFullTextURL](func() error {
+				return fmt.Errorf("no PDF URL listed for PMID %s", state.PMID)
+			}),
+		)),
+		IOE.Map[error](func(u literature.EuropePMCFullTextURL) State {
+			return pdfURLLens.Set(u.URL)(state)
+		}),
 	)
 }
 
-func downloadEuropePDF(
-	ctx WithEuropePMCArticle,
-) IOE.IOEither[error, any] {
-	return F.Pipe4(
-		IOE.Of[error](
-			DownloadContext{
-				WithPubMedClient: ctx.WithPubMedClient,
-				PMID:             ctx.Article.PMID,
-			},
-		),
+func downloadEuropePDF(st State) IOE.IOEither[error, State] {
+	return F.Pipe3(
+		IOE.Of[error](pmidLens.Set(st.EuropeArticle.PMID)(st)),
 		IOE.Chain(getPDFURLs),
-		IOE.Map[error](setTargetFilename),
+		IOE.Let[error](targetFileLens.Set, targetFilename),
 		IOE.Chain(downloadPDF),
-		IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
 	)
 }
 
-func fallbackEurope(
-	ctx WithEuropePMCArticle,
-) IOE.IOEither[error, any] {
-	return F.Pipe4(
-		IOE.Of[error](DownloadContext{
-			WithPubMedClient: ctx.WithPubMedClient,
-			PMID:             ctx.Article.PMID,
-		}),
-		IOE.Chain(checkPubMedAvailability),
-		IOE.Map[error](setTargetFilename),
-		IOE.Chain(downloadFromPubMed),
-		IOE.Map[error](F.Constant1[DownloadContext, any](nil)),
+func fallbackEurope(st State) IOE.IOEither[error, State] {
+	return F.Pipe1(
+		pmidLens.Set(st.EuropeArticle.PMID)(st),
+		pubMedDownloadTail,
 	)
 }
