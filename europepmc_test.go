@@ -27,10 +27,12 @@ func createTestEuropePMCClient(
 	t.Helper()
 
 	// Create test server with the handler
-	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		// Route all requests to our test handler
-		handler(responseWriter, request)
-	}))
+	server := httptest.NewServer(
+		http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			// Route all requests to our test handler
+			handler(responseWriter, request)
+		}),
+	)
 
 	// Create client configured to use the test server
 	client, err := NewEuropePMCClient(
@@ -211,56 +213,107 @@ func testGetArticleByDOICore(params *testParams, testDOI, expectedTitle string) 
 	params.t.Helper()
 
 	article, err := params.client.GetArticleByDOI(testDOI)
-
-	// Assert no error occurred
 	params.assert.NoError(err, "should successfully fetch article by DOI")
-
-	// Assert article is not nil
 	params.assert.NotNil(article, "article should not be nil")
-
-	// Assert DOI matches input
 	params.assert.Equal(testDOI, article.DOI, "article DOI should match input DOI")
-
-	// Assert title matches expected value
 	params.assert.Equal(expectedTitle, article.Title, "article title should match expected title")
 
-	// Assert other key fields are properly populated
+	assertArticleBasics(params, article)
+	assertArticleJournal(params, article)
+	assertArticleAuthors(params, article)
+	assertArticlePubTypes(params, article)
+	assertArticleKeywords(params, article)
+	assertArticleFullTextURLs(params, article)
+}
+
+func assertArticleBasics(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.Equal("23842501", article.PMID, "article PMID should be correctly set")
-	params.assert.Equal("Smith J, Doe A", article.AuthorString, "article author string should be correctly set")
+	params.assert.Equal(
+		"Smith J, Doe A",
+		article.AuthorString,
+		"article author string should be correctly set",
+	)
 	params.assert.True(article.HasPDF, "article should indicate PDF availability")
 	params.assert.False(article.IsOpenAccess, "article should indicate correct open access status")
 	params.assert.Equal("eng", article.Language, "article language should be correctly set")
 	params.assert.Equal("2023", article.PubYear, "article publication year should be correctly set")
-	params.assert.Equal("This is a test abstract", article.Abstract, "article abstract should be correctly set")
+	params.assert.Equal(
+		"This is a test abstract",
+		article.Abstract,
+		"article abstract should be correctly set",
+	)
+}
 
-	// Assert journal information is populated
+func assertArticleJournal(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.NotNil(article.Journal, "journal information should not be nil")
-	params.assert.Equal("Test Journal", article.Journal.Title, "journal title should be correctly set")
+	params.assert.Equal(
+		"Test Journal",
+		article.Journal.Title,
+		"journal title should be correctly set",
+	)
 	params.assert.Equal("1234-5678", article.Journal.ISSN, "journal ISSN should be correctly set")
 	params.assert.Equal("10", article.Journal.Volume, "journal volume should be correctly set")
 	params.assert.Equal("1", article.Journal.Issue, "journal issue should be correctly set")
+}
 
-	// Assert authors are populated
+func assertArticleAuthors(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.NotEmpty(article.Authors, "authors list should not be empty")
-	params.assert.Equal("John Smith", article.Authors[0].FullName, "first author full name should be correctly set")
-	params.assert.Equal("John", article.Authors[0].FirstName, "first author first name should be correctly set")
-	params.assert.Equal("Smith", article.Authors[0].LastName, "first author last name should be correctly set")
-	params.assert.Equal("J", article.Authors[0].Initials, "first author initials should be correctly set")
+	params.assert.Equal(
+		"John Smith",
+		article.Authors[0].FullName,
+		"first author full name should be correctly set",
+	)
+	params.assert.Equal(
+		"John",
+		article.Authors[0].FirstName,
+		"first author first name should be correctly set",
+	)
+	params.assert.Equal(
+		"Smith",
+		article.Authors[0].LastName,
+		"first author last name should be correctly set",
+	)
+	params.assert.Equal(
+		"J",
+		article.Authors[0].Initials,
+		"first author initials should be correctly set",
+	)
+}
 
-	// Assert publication types are populated
+func assertArticlePubTypes(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.NotEmpty(article.PubTypes, "publication types should not be empty")
-	params.assert.Contains(article.PubTypes, "Journal Article", "should contain expected publication type")
+	params.assert.Contains(
+		article.PubTypes,
+		"Journal Article",
+		"should contain expected publication type",
+	)
+}
 
-	// Assert keywords are populated
+func assertArticleKeywords(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.NotEmpty(article.Keywords, "keywords should not be empty")
 	params.assert.Contains(article.Keywords, "test", "should contain expected keyword 'test'")
 	params.assert.Contains(article.Keywords, "example", "should contain expected keyword 'example'")
+}
 
-	// Assert full text URLs are populated
+func assertArticleFullTextURLs(params *testParams, article *EuropePMCArticle) {
+	params.t.Helper()
 	params.assert.NotEmpty(article.FullTextURLs, "full text URLs should not be empty")
-	params.assert.Equal("pdf", article.FullTextURLs[0].DocumentStyle, "document style should be PDF")
+	params.assert.Equal(
+		"pdf",
+		article.FullTextURLs[0].DocumentStyle,
+		"document style should be PDF",
+	)
 	params.assert.Equal("Europe PMC", article.FullTextURLs[0].Site, "site should be correctly set")
-	params.assert.Equal("https://example.com/pdf", article.FullTextURLs[0].URL, "URL should be correctly set")
+	params.assert.Equal(
+		"https://example.com/pdf",
+		article.FullTextURLs[0].URL,
+		"URL should be correctly set",
+	)
 }
 
 func testGetArticleByDOINotFound(params *testParams, testDOI string) {
@@ -272,7 +325,11 @@ func testGetArticleByDOINotFound(params *testParams, testDOI string) {
 
 	var litErr *Error
 	params.assert.ErrorAs(err, &litErr, "error should be of type *Error")
-	params.assert.Equal(ErrorTypeArticleNotFound, litErr.Type, "error type should be article not found")
+	params.assert.Equal(
+		ErrorTypeArticleNotFound,
+		litErr.Type,
+		"error type should be article not found",
+	)
 	params.assert.Equal(testDOI, litErr.DOI, "error should contain the DOI")
 }
 
