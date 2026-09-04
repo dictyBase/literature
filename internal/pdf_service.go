@@ -1,24 +1,27 @@
 package internal
 
 import (
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"time"
-
-	"github.com/jlaffaye/ftp"
 )
+
+// maxPDFVersion bounds the version probing loop. PMC article versions rarely
+// exceed a handful, so a small fixed bound keeps lookups cheap.
+const maxPDFVersion = 10
+
+// errPDFNotFound marks a version-exhaustion miss so callers can distinguish
+// "no PDF for this PMCID" from transport or unexpected status failures.
+var errPDFNotFound = errors.New("no PDF found within probed versions")
 
 // PDFService handles PDF link discovery and downloading.
 type PDFService struct {
 	articleService *ArticleService
 	httpClient     *http.Client
-	oaBaseURL      string
+	pdfBaseURL     string
 	// State for caching download readiness
 	currentPMID  string
 	downloadInfo *PDFDownloadInfo
@@ -40,7 +43,7 @@ func NewPDFService(options ...PDFServiceOption) *PDFService {
 	service := &PDFService{
 		articleService: NewArticleService(),
 		httpClient:     &http.Client{Timeout: 30 * time.Second},
-		oaBaseURL:      "https://www.ncbi.nlm.nih.gov/pmc/utils/oa",
+		pdfBaseURL:     "https://pmc-oa-opendata.s3.amazonaws.com",
 	}
 
 	for _, option := range options {
@@ -83,33 +86,49 @@ func (s *PDFService) GetCurrentPMID() string {
 	return s.currentPMID
 }
 
-// fetchOADetails retrieves Open Access details for a given PMC ID.
-func (s *PDFService) fetchOADetails(pmcID string) (*OARecord, error) {
-	oaURL := fmt.Sprintf(
-		"%s/oa.fcgi?id=%s",
-		s.oaBaseURL,
-		pmcID,
-	)
+// resolvePDFURL probes the PMC Open Access S3 bucket for
+// {PMCID}.{version}/{PMCID}.{version}.pdf, versions 1..maxPDFVersion.
+// Both 404 and 403 count as misses: S3 answers HEAD with 403 for absent keys
+// when anonymous callers lack ListBucket permission.
+func (s *PDFService) resolvePDFURL(pmcid string) (string, error) {
+	var lastErr error
 
-	// #nosec G107
-	resp, err := s.httpClient.Get(oaURL)
-	if err != nil {
-		return nil, fmt.Errorf("error making OA request: %w", err)
-	}
-	defer resp.Body.Close()
+	for version := 1; version <= maxPDFVersion; version++ {
+		candidate := fmt.Sprintf(
+			"%s/%s.%d/%s.%d.pdf",
+			s.pdfBaseURL,
+			pmcid,
+			version,
+			pmcid,
+			version,
+		)
+		// #nosec G107
+		resp, err := s.httpClient.Head(candidate)
+		if err != nil {
+			lastErr = fmt.Errorf("HEAD %s: %w", candidate, err)
+			return "", lastErr
+		}
+		status := resp.StatusCode
+		_ = resp.Body.Close()
 
-	oaResponse := &OAResponse{}
-	if err := xml.NewDecoder(resp.Body).Decode(oaResponse); err != nil {
-		return nil, fmt.Errorf("error unmarshalling OA response: %w", err)
+		switch {
+		case status >= 200 && status < 300:
+			return candidate, nil
+		case status == 404 || status == 403:
+			continue
+		default:
+			return "", fmt.Errorf(
+				"unexpected status %d probing %s",
+				status,
+				candidate,
+			)
+		}
 	}
-	if len(oaResponse.Records.Records) == 0 {
-		return nil, fmt.Errorf("no records found in OA response for %s", pmcID)
-	}
-	// Assuming the first record is the one we want.
-	return &oaResponse.Records.Records[0], nil
+
+	return "", errPDFNotFound
 }
 
-// FindPDFDownloadInfo locates PDF download information for the given PMID.
+// findPDFDownloadInfo locates PDF download information for the given PMID.
 func (s *PDFService) findPDFDownloadInfo(
 	pmid string,
 ) (*PDFDownloadInfo, error) {
@@ -129,27 +148,21 @@ func (s *PDFService) findPDFDownloadInfo(
 		}
 	}
 
-	oaRecord, err := s.fetchOADetails(pmcArticleID.Value)
+	pdfURL, err := s.resolvePDFURL(pmcArticleID.Value)
 	if err != nil {
-		return nil, &PDFError{
-			PMID: pmid,
-			Type: PDFErrorPDFNotAvailable,
-			Err:  err,
+		if errors.Is(err, errPDFNotFound) {
+			return nil, &PDFError{
+				PMID: pmid,
+				Type: PDFErrorPDFNotAvailable,
+			}
 		}
-	}
-
-	pdfLink, found := Find(oaRecord.Links, IsPDFLink)
-	if !found {
-		return nil, &PDFError{
-			PMID: pmid,
-			Type: PDFErrorPDFNotAvailable,
-		}
+		return nil, err
 	}
 
 	return &PDFDownloadInfo{
-		PMID:    pmid,
-		PMCID:   pmcArticleID.Value,
-		PDFLink: pdfLink,
+		PMID:   pmid,
+		PMCID:  pmcArticleID.Value,
+		PDFURL: pdfURL,
 	}, nil
 }
 
@@ -167,7 +180,7 @@ func (s *PDFService) DownloadPDF(filePath string) error {
 	// Clear state after download regardless of success/failure
 	defer s.clearState()
 
-	err := s.downloadFromFTP(s.downloadInfo.PDFLink.HREF, filePath)
+	err := s.downloadFromHTTP(s.downloadInfo.PDFURL, filePath)
 	if err != nil {
 		return &PDFError{
 			PMID: s.downloadInfo.PMID,
@@ -179,38 +192,23 @@ func (s *PDFService) DownloadPDF(filePath string) error {
 	return nil
 }
 
-// downloadFromFTP downloads a file from an FTP URL to the specified file path.
-func (s *PDFService) downloadFromFTP(ftpURL, filePath string) error {
-	parsedURL, err := url.Parse(ftpURL)
+// downloadFromHTTP downloads a file over HTTP(S) to the given path. Any
+// partial output file is removed when the fetch or copy fails.
+func (s *PDFService) downloadFromHTTP(url, filePath string) error {
+	// #nosec G107
+	resp, err := s.httpClient.Get(url)
 	if err != nil {
-		return fmt.Errorf("invalid FTP URL: %w", err)
+		return fmt.Errorf("failed to fetch PDF: %w", err)
 	}
+	defer resp.Body.Close()
 
-	host := parsedURL.Host
-	if !strings.Contains(host, ":") {
-		host += ":21" // Default FTP port
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf(
+			"unexpected status %d downloading PDF from %s",
+			resp.StatusCode,
+			url,
+		)
 	}
-
-	fclient, err := ftp.Dial(host, ftp.DialWithTimeout(5*time.Second))
-	if err != nil {
-		return fmt.Errorf("failed to connect to FTP server: %w", err)
-	}
-	defer func() {
-		_ = fclient.Quit() // Ignore quit errors
-	}()
-
-	err = fclient.Login("anonymous", "anonymous")
-	if err != nil {
-		return fmt.Errorf("FTP login failed: %w", err)
-	}
-
-	path := parsedURL.Path
-
-	res, err := fclient.Retr(path)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve file from FTP: %w", err)
-	}
-	defer res.Close()
 
 	outFile, err := os.Create(filePath)
 	if err != nil {
@@ -218,8 +216,8 @@ func (s *PDFService) downloadFromFTP(ftpURL, filePath string) error {
 	}
 	defer outFile.Close()
 
-	_, err = io.Copy(outFile, res)
-	if err != nil {
+	if _, err = io.Copy(outFile, resp.Body); err != nil {
+		_ = os.Remove(filePath)
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -237,7 +235,7 @@ func (s *PDFService) GetPDFURL() (string, error) {
 		}
 	}
 
-	return s.downloadInfo.PDFLink.HREF, nil
+	return s.downloadInfo.PDFURL, nil
 }
 
 // DownloadArticlePDF is a convenience method that combines availability check and downloading.

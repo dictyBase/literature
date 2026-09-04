@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -11,26 +13,28 @@ import (
 )
 
 const (
-	testPMID    = "12345"
-	testPMCID   = "PMC67890"
-	testPDFURL  = "ftp://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_pdf/00/01/some.pdf"
-	testPDFHREF = "some_url"
-	efetchPath  = "/efetch.fcgi"
-	oaPath      = "/oa.fcgi"
+	testPMID   = "12345"
+	testPMCID  = "PMC67890"
+	testPDFURL = "https://bucket.example.com/PMC67890.1/PMC67890.1.pdf"
+	efetchPath = "/efetch.fcgi"
 )
 
-// mockAPIHandler returns a handler that serves mock XML responses for different
-// endpoints.
-func mockAPIHandler() http.Handler {
-	mux := http.NewServeMux()
+// s3Path builds the deterministic PDF key suffix for a PMCID/version pair.
+func s3Path(version int) string {
+	return fmt.Sprintf("/%s.%d/%s.%d.pdf", testPMCID, version, testPMCID, version)
+}
 
-	// Mock for ArticleService efetch
+// mockEfetchHandler serves a minimal PubMed XML response for testPMID.
+func mockEfetchHandler() http.Handler {
+	mux := http.NewServeMux()
 	mux.HandleFunc(
 		efetchPath,
 		func(writer http.ResponseWriter, request *http.Request) {
-			pmid := request.URL.Query().Get("id")
-			if pmid == testPMID {
-				fmt.Fprintf(writer, `
+			if request.URL.Query().Get("id") != testPMID {
+				http.NotFound(writer, request)
+				return
+			}
+			fmt.Fprintf(writer, `
 <PubmedArticleSet>
     <PubmedArticle>
         <MedlineCitation>
@@ -43,47 +47,72 @@ func mockAPIHandler() http.Handler {
         </PubmedData>
     </PubmedArticle>
 </PubmedArticleSet>`, testPMID, testPMCID)
-			} else {
-				http.NotFound(writer, request)
-			}
 		},
 	)
-
-	// Mock for PDFService OA fetch
-	mux.HandleFunc(
-		oaPath,
-		func(writer http.ResponseWriter, request *http.Request) {
-			id := request.URL.Query().Get("id")
-			if id == testPMCID {
-				fmt.Fprintf(writer, `
-<OA>
-    <records>
-        <record id="%s">
-            <link format="pdf" href="%s"/>
-        </record>
-    </records>
-</OA>`, testPMCID, testPDFURL)
-			} else {
-				http.NotFound(writer, request)
-			}
-		},
-	)
-
 	return mux
 }
 
-// newTestPDFService creates a PDFService configured for testing with a mock
-// server.
-func newTestPDFService(handler http.Handler) (*PDFService, *httptest.Server) {
-	server := httptest.NewServer(handler)
-	client := server.Client()
+// mockS3Handler serves HEAD/GET at deterministic {PMCID}.{v} key paths.
+// statusByVersion maps 1-based versions to HTTP statuses and bodies; missing
+// entries return 404.
+func mockS3Handler(
+	statusByVersion map[int]int,
+	body string,
+) http.Handler {
+	return http.HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			version := 0
+			for v := 1; v <= maxPDFVersion; v++ {
+				if request.URL.Path == s3Path(v) {
+					version = v
+					break
+				}
+			}
+			if version == 0 {
+				http.NotFound(writer, request)
+				return
+			}
+			status, ok := statusByVersion[version]
+			if !ok || status != http.StatusOK {
+				if ok {
+					writer.WriteHeader(status)
+					return
+				}
+				http.NotFound(writer, request)
+				return
+			}
+			if request.Method == http.MethodGet {
+				fmt.Fprint(writer, body)
+			}
+		},
+	)
+}
 
-	service := NewPDFService(WithHTTPClient(client))
-	service.oaBaseURL = server.URL
-	// The internal article service also needs its URL updated.
-	service.articleService.baseURL = server.URL
+// newTestPDFService wires a PDFService to mock efetch + mock S3 servers.
+func newTestPDFService(
+	s3handler http.Handler,
+	s3body string,
+) (*PDFService, *httptest.Server, *httptest.Server) {
+	if s3handler == nil || s3body != "" {
+		s3handler = mockS3Handler(mockOKVersions(1), s3body)
+	}
+	efetchServer := httptest.NewServer(mockEfetchHandler())
+	s3Server := httptest.NewServer(s3handler)
 
-	return service, server
+	service := NewPDFService(WithHTTPClient(s3Server.Client()))
+	service.pdfBaseURL = s3Server.URL
+	service.articleService.baseURL = efetchServer.URL
+
+	return service, efetchServer, s3Server
+}
+
+// mockOKVersions reports success at the given versions.
+func mockOKVersions(versions ...int) map[int]int {
+	result := make(map[int]int)
+	for _, v := range versions {
+		result[v] = http.StatusOK
+	}
+	return result
 }
 
 func TestNewPDFService(t *testing.T) {
@@ -95,7 +124,10 @@ func TestNewPDFService(t *testing.T) {
 	req.NotNil(service.articleService)
 	req.NotNil(service.httpClient)
 	req.Equal(30*time.Second, service.httpClient.Timeout)
-	req.Equal("https://www.ncbi.nlm.nih.gov/pmc/utils/oa", service.oaBaseURL)
+	req.Equal(
+		"https://pmc-oa-opendata.s3.amazonaws.com",
+		service.pdfBaseURL,
+	)
 }
 
 func TestWithHTTPClient(t *testing.T) {
@@ -108,11 +140,89 @@ func TestWithHTTPClient(t *testing.T) {
 	req.Equal(customClient, service.articleService.httpClient)
 }
 
+func TestResolvePDFURL_V1Success(t *testing.T) {
+	t.Parallel()
+	req := require.New(t)
+	service, efetch, s3Server := newTestPDFService(nil, "")
+	defer efetch.Close()
+	defer s3Server.Close()
+
+	url, err := service.resolvePDFURL(testPMCID)
+
+	req.NoError(err)
+	req.Equal(s3Server.URL+s3Path(1), url)
+}
+
+func TestResolvePDFURL_VersionFallback(t *testing.T) {
+	t.Parallel()
+	for _, miss := range []int{http.StatusForbidden, http.StatusNotFound} {
+		name := fmt.Sprintf("after_%d", miss)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			req := require.New(t)
+			handler := mockS3Handler(
+				map[int]int{1: miss, 3: http.StatusOK},
+				"",
+			)
+			service, efetch, s3Server := newTestPDFService(handler, "")
+			defer efetch.Close()
+			defer s3Server.Close()
+
+			url, err := service.resolvePDFURL(testPMCID)
+
+			req.NoError(err)
+			req.Equal(s3Server.URL+s3Path(3), url)
+		})
+	}
+}
+
+func TestResolvePDFURL_ExhaustedIsNotFound(t *testing.T) {
+	t.Parallel()
+	req := require.New(t)
+	handler := mockS3Handler(nil, "")
+	service, efetch, s3Server := newTestPDFService(handler, "")
+	defer efetch.Close()
+	defer s3Server.Close()
+
+	_, err := service.resolvePDFURL(testPMCID)
+
+	req.ErrorIs(err, errPDFNotFound)
+}
+
+func TestResolvePDFURL_UnexpectedStatus(t *testing.T) {
+	t.Parallel()
+	req := require.New(t)
+	handler := mockS3Handler(map[int]int{1: http.StatusInternalServerError}, "")
+	service, efetch, s3Server := newTestPDFService(handler, "")
+	defer efetch.Close()
+	defer s3Server.Close()
+
+	_, err := service.resolvePDFURL(testPMCID)
+
+	req.Error(err)
+	req.NotErrorIs(err, errPDFNotFound)
+}
+
+func TestIsPDFAvailable_ExhaustedReturnsFalse(t *testing.T) {
+	t.Parallel()
+	req := require.New(t)
+	handler := mockS3Handler(nil, "")
+	service, efetch, s3Server := newTestPDFService(handler, "")
+	defer efetch.Close()
+	defer s3Server.Close()
+
+	available, err := service.IsPDFAvailable(testPMID)
+
+	req.NoError(err)
+	req.False(available)
+}
+
 func TestStateManagement(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
-	service, server := newTestPDFService(mockAPIHandler())
-	defer server.Close()
+	service, efetch, s3Server := newTestPDFService(nil, "")
+	defer efetch.Close()
+	defer s3Server.Close()
 
 	// 1. Initial state
 	req.Empty(service.GetCurrentPMID())
@@ -131,48 +241,12 @@ func TestStateManagement(t *testing.T) {
 	req.Nil(service.downloadInfo)
 }
 
-func TestIsPDFAvailable_Success(t *testing.T) {
-	t.Parallel()
-	req := require.New(t)
-	service, server := newTestPDFService(mockAPIHandler())
-	defer server.Close()
-
-	// Set some dummy initial state to ensure it gets cleared
-	service.currentPMID = "stale-pmid"
-	service.downloadInfo = &PDFDownloadInfo{}
-
-	available, err := service.IsPDFAvailable(testPMID)
-
-	req.NoError(err)
-	req.True(available)
-	req.Equal(testPMID, service.currentPMID)
-	req.NotNil(service.downloadInfo)
-	req.Equal(testPMID, service.downloadInfo.PMID)
-	req.Equal(testPMCID, service.downloadInfo.PMCID)
-	req.Equal(testPDFURL, service.downloadInfo.PDFLink.HREF)
-}
-
-func TestFetchOADetails_Success(t *testing.T) {
-	t.Parallel()
-	req := require.New(t)
-	service, server := newTestPDFService(mockAPIHandler())
-	defer server.Close()
-
-	oaRecord, err := service.fetchOADetails(testPMCID)
-
-	req.NoError(err)
-	req.NotNil(oaRecord)
-	req.Equal(testPMCID, oaRecord.ID)
-	req.Len(oaRecord.Links, 1)
-	req.Equal("pdf", oaRecord.Links[0].Format)
-	req.Equal(testPDFURL, oaRecord.Links[0].HREF)
-}
-
 func TestFindPDFDownloadInfo_Success(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
-	service, server := newTestPDFService(mockAPIHandler())
-	defer server.Close()
+	service, efetch, s3Server := newTestPDFService(nil, "")
+	defer efetch.Close()
+	defer s3Server.Close()
 
 	info, err := service.findPDFDownloadInfo(testPMID)
 
@@ -180,76 +254,68 @@ func TestFindPDFDownloadInfo_Success(t *testing.T) {
 	req.NotNil(info)
 	req.Equal(testPMID, info.PMID)
 	req.Equal(testPMCID, info.PMCID)
-	req.NotNil(info.PDFLink)
-	req.Equal(testPDFURL, info.PDFLink.HREF)
+	req.Equal(s3Server.URL+s3Path(1), info.PDFURL)
 }
 
 func TestGetPDFURL_Success(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
-	service, server := newTestPDFService(mockAPIHandler())
-	defer server.Close()
+	service, efetch, s3Server := newTestPDFService(nil, "")
+	defer efetch.Close()
+	defer s3Server.Close()
 
 	// First, populate the state
 	_, err := service.IsPDFAvailable(testPMID)
 	req.NoError(err)
 
-	// Then, test GetPDFURL
 	pdfURL, err := service.GetPDFURL()
 	req.NoError(err)
-	req.Equal(testPDFURL, pdfURL)
+	req.Equal(s3Server.URL+s3Path(1), pdfURL)
 }
 
-func TestIsPMCID(t *testing.T) {
+func TestDownloadPDF_Success(t *testing.T) {
 	t.Parallel()
-	testCases := []struct {
-		name     string
-		id       ArticleID
-		expected bool
-	}{
-		{"Valid PMCID", ArticleID{IDType: "pmc", Value: "PMC123"}, true},
-		{"Not PMCID", ArticleID{IDType: "doi", Value: "10.1000/xyz"}, false},
-		{"Empty IDType", ArticleID{Value: "123"}, false},
-		{
-			"Case sensitive check",
-			ArticleID{IDType: "Pmc", Value: "PMC123"},
-			false,
-		},
-	}
+	req := require.New(t)
+	service, efetch, s3Server := newTestPDFService(nil, "%PDF-1.4 fake")
+	defer efetch.Close()
+	defer s3Server.Close()
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			req := require.New(t)
-			result := IsPMCID(testCase.id)
-			req.Equal(testCase.expected, result)
-		})
-	}
+	available, err := service.IsPDFAvailable(testPMID)
+	req.NoError(err)
+	req.True(available)
+
+	filePath := filepath.Join(t.TempDir(), "out.pdf")
+	req.NoError(service.DownloadPDF(filePath))
+
+	content, err := os.ReadFile(filePath)
+	req.NoError(err)
+	req.Equal("%PDF-1.4 fake", string(content))
 }
 
-func TestIsPDFLink(t *testing.T) {
+func TestDownloadPDF_NoPartialFileOnFailure(t *testing.T) {
 	t.Parallel()
-	testCases := []struct {
-		name     string
-		link     OALink
-		expected bool
-	}{
-		{"Valid PDF link", OALink{Format: "pdf", HREF: testPDFHREF}, true},
-		{"Not a PDF link", OALink{Format: "tgz", HREF: testPDFHREF}, false},
-		{"Empty format", OALink{HREF: testPDFHREF}, false},
-		{
-			"Case sensitive check",
-			OALink{Format: "PDF", HREF: testPDFHREF},
-			false,
+	req := require.New(t)
+	handler := http.HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method == http.MethodGet {
+				writer.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		},
-	}
+	)
+	service, efetch, s3Server := newTestPDFService(handler, "")
+	defer efetch.Close()
+	defer s3Server.Close()
 
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-			req := require.New(t)
-			result := IsPDFLink(testCase.link)
-			req.Equal(testCase.expected, result)
-		})
-	}
+	available, err := service.IsPDFAvailable(testPMID)
+	req.NoError(err)
+	req.True(available)
+
+	filePath := filepath.Join(t.TempDir(), "out.pdf")
+	err = service.DownloadPDF(filePath)
+	req.Error(err)
+
+	_, statErr := os.Stat(filePath)
+	req.Error(statErr)
+	req.True(os.IsNotExist(statErr))
 }

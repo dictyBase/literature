@@ -14,8 +14,3 @@ func IsDOI(id ArticleID) bool {
 func IsPMCID(id ArticleID) bool {
 	return id.IDType == pmcIDType
 }
-
-// IsPDFLink checks if an OALink is a PDF download link.
-func IsPDFLink(link OALink) bool {
-	return link.Format == "pdf"
-}
