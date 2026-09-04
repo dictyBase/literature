@@ -13,11 +13,13 @@ type ArticleService struct {
 	baseURL    string
 }
 
+const eutilsBaseURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+
 // NewArticleService creates a new ArticleService with default configuration.
 func NewArticleService() *ArticleService {
 	return &ArticleService{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+		baseURL:    eutilsBaseURL,
 	}
 }
 

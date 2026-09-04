@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	testPMID   = "12345"
-	testPMCID  = "PMC67890"
-	testPDFURL = "ftp://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_pdf/00/01/some.pdf"
-	efetchPath = "/efetch.fcgi"
-	oaPath     = "/oa.fcgi"
+	testPMID    = "12345"
+	testPMCID   = "PMC67890"
+	testPDFURL  = "ftp://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_pdf/00/01/some.pdf"
+	testPDFHREF = "some_url"
+	efetchPath  = "/efetch.fcgi"
+	oaPath      = "/oa.fcgi"
 )
 
 // mockAPIHandler returns a handler that serves mock XML responses for different
@@ -217,7 +218,6 @@ func TestIsPMCID(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			req := require.New(t)
@@ -234,18 +234,17 @@ func TestIsPDFLink(t *testing.T) {
 		link     OALink
 		expected bool
 	}{
-		{"Valid PDF link", OALink{Format: "pdf", HREF: "some_url"}, true},
-		{"Not a PDF link", OALink{Format: "tgz", HREF: "some_url"}, false},
-		{"Empty format", OALink{HREF: "some_url"}, false},
+		{"Valid PDF link", OALink{Format: "pdf", HREF: testPDFHREF}, true},
+		{"Not a PDF link", OALink{Format: "tgz", HREF: testPDFHREF}, false},
+		{"Empty format", OALink{HREF: testPDFHREF}, false},
 		{
 			"Case sensitive check",
-			OALink{Format: "PDF", HREF: "some_url"},
+			OALink{Format: "PDF", HREF: testPDFHREF},
 			false,
 		},
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			req := require.New(t)

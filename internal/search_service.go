@@ -41,7 +41,7 @@ func WithRetrieval(retmax, retstart int) SearchServiceOption {
 func NewSearchService(options ...SearchServiceOption) *SearchService {
 	service := &SearchService{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+		baseURL:    eutilsBaseURL,
 		retmax:     10, // default value
 		retstart:   0,  // default value
 	}

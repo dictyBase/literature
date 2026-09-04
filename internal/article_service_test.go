@@ -31,7 +31,7 @@ func TestNewArticleService(t *testing.T) {
 	req.NotNil(service)
 	req.Equal(30*time.Second, service.httpClient.Timeout)
 
-	expectedBaseURL := "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+	expectedBaseURL := eutilsBaseURL
 	req.Equal(expectedBaseURL, service.baseURL)
 }
 
@@ -263,7 +263,6 @@ func TestFormatAuthor(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			req := require.New(t)
@@ -282,12 +281,12 @@ func TestIsDOI(t *testing.T) {
 	}{
 		{
 			name:     "ValidDOI",
-			id:       ArticleID{IDType: "doi", Value: "10.1000/xyz123"},
+			id:       ArticleID{IDType: doiIDType, Value: "10.1000/xyz123"},
 			expected: true,
 		},
 		{
 			name:     "NotDOI",
-			id:       ArticleID{IDType: "pmc", Value: "PMC12345"},
+			id:       ArticleID{IDType: pmcIDType, Value: "PMC12345"},
 			expected: false,
 		},
 		{
@@ -298,7 +297,6 @@ func TestIsDOI(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			req := require.New(t)
