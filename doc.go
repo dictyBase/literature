@@ -33,6 +33,23 @@ The client can be configured with various options:
 		literature.WithHTTPClient(customHTTPClient),
 	)
 
+NCBI recommends including a `tool` name and developer `email` with every
+E-utilities request. Supply your own API key; the package does not bundle one
+or read environment variables:
+
+	import "os"
+
+	client, err := literature.New(
+		literature.WithAPIKey(os.Getenv("NCBI_API_KEY")),
+		literature.WithTool("my-tool"),
+		literature.WithEmail(os.Getenv("NCBI_EMAIL")),
+	)
+
+`WithTool` rejects values containing spaces, and `WithEmail` validates the
+address. An empty `NCBI_API_KEY` omits `api_key`, so NCBI's no-key limit applies.
+See [NCBI API key instructions](https://www.ncbi.nlm.nih.gov/books/NBK25501/)
+and [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
+
 # Error Handling
 
 The package provides structured error types for better error handling:
@@ -103,9 +120,12 @@ All methods can be called from different goroutines simultaneously.
 
 # Rate Limiting
 
-Be mindful of NCBI's usage guidelines and rate limits. The package
-currently does not implement automatic rate limiting, but this may
-be added in future versions through configuration options.
+NCBI's default E-utilities limits are 3 requests per second per IP address
+without an API key and 10 requests per second with a key. Include `tool` and
+`email` on every request. The package does not throttle PubMed requests; callers
+must manage aggregate traffic across their processes and keep within NCBI's
+limits. Each `Search` call makes two E-utilities requests. For higher rates,
+request approval from NCBI. See the [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
 
 For more examples, see the examples/ directory in the source repository.
 */
