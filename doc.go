@@ -83,7 +83,8 @@ Search for articles using natural language queries:
 
 # Batch Operations
 
-Fetch multiple articles efficiently:
+`GetArticles` fetches PMIDs sequentially. It makes one E-utilities request per
+PMID instead of a single multi-ID request.
 
 	pmids := []string{"12345678", "87654321", "11111111"}
 	articles, err := client.GetArticles(pmids)
@@ -115,8 +116,10 @@ Check for and retrieve PDF information:
 
 # Thread Safety
 
-The client is safe for concurrent use across multiple goroutines.
-All methods can be called from different goroutines simultaneously.
+PubMed article fetches and searches can run concurrently on one client. PDF
+workflow methods (`HasPDF`, `GetPDF`, and `DownloadPDF`) share cached state;
+do not overlap PDF workflows on the
+same client. Use separate clients for concurrent PDF workflows.
 
 # Rate Limiting
 
@@ -124,7 +127,8 @@ NCBI's default E-utilities limits are 3 requests per second per IP address
 without an API key and 10 requests per second with a key. Include `tool` and
 `email` on every request. The package does not throttle PubMed requests; callers
 must manage aggregate traffic across their processes and keep within NCBI's
-limits. Each `Search` call makes two E-utilities requests. For higher rates,
+limits. Each `Search` or `FindSimilar` call makes two E-utilities requests;
+`GetArticles(n)` makes `n` sequential efetch requests. For higher rates,
 request approval from NCBI. See the [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
 
 For more examples, see the examples/ directory in the source repository.
