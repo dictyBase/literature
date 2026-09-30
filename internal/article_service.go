@@ -12,17 +12,54 @@ import (
 type ArticleService struct {
 	httpClient *http.Client
 	baseURL    string
+	userAgent  string
 	identity   Identity
 }
 
+// ArticleServiceOption configures ArticleService behavior.
+type ArticleServiceOption func(*ArticleService)
+
 const eutilsBaseURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 
+// WithArticleHTTPClient sets a custom HTTP client for the article service.
+func WithArticleHTTPClient(client *http.Client) ArticleServiceOption {
+	return func(service *ArticleService) {
+		if client != nil {
+			service.httpClient = client
+		}
+	}
+}
+
+// WithArticleBaseURL sets the base URL for E-utilities requests.
+func WithArticleBaseURL(baseURL string) ArticleServiceOption {
+	return func(service *ArticleService) {
+		if baseURL != "" {
+			service.baseURL = baseURL
+		}
+	}
+}
+
+// WithArticleUserAgent sets the User-Agent header for E-utilities requests.
+func WithArticleUserAgent(userAgent string) ArticleServiceOption {
+	return func(service *ArticleService) {
+		if userAgent != "" {
+			service.userAgent = userAgent
+		}
+	}
+}
+
 // NewArticleService creates a new ArticleService with default configuration.
-func NewArticleService() *ArticleService {
-	return &ArticleService{
+func NewArticleService(options ...ArticleServiceOption) *ArticleService {
+	service := &ArticleService{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    eutilsBaseURL,
 	}
+
+	for _, option := range options {
+		option(service)
+	}
+
+	return service
 }
 
 func (s *ArticleService) efetchURL(pmid string) string {
@@ -38,9 +75,20 @@ func (s *ArticleService) efetchURL(pmid string) string {
 // FetchArticle retrieves article metadata for the given PMID.
 func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
 	efetchURL := s.efetchURL(pmid)
+	request, err := http.NewRequest(http.MethodGet, efetchURL, nil)
+	if err != nil {
+		return nil, &PDFError{
+			PMID: pmid,
+			Type: PDFErrorArticleNotFound,
+			Err:  fmt.Errorf("error creating efetch request: %w", err),
+		}
+	}
+	if s.userAgent != "" {
+		request.Header.Set("User-Agent", s.userAgent)
+	}
 
 	// #nosec G107
-	resp, err := s.httpClient.Get(efetchURL)
+	resp, err := s.httpClient.Do(request)
 	if err != nil {
 		return nil, &PDFError{
 			PMID: pmid,

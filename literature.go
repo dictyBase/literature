@@ -36,22 +36,20 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
-	// Initialize services using internal constructors with appropriate options
-	var pdfOpts []internal.PDFServiceOption
-	var searchOpts []internal.SearchServiceOption
-
-	// Pass HTTP client to internal services if configured
-	if client.httpClient != nil {
-		pdfOpts = append(pdfOpts, internal.WithHTTPClient(client.httpClient))
-		searchOpts = append(
-			searchOpts,
-			internal.WithSearchHTTPClient(client.httpClient),
-		)
-	}
-
-	client.articleService = internal.NewArticleService()
-	client.searchService = internal.NewSearchService(searchOpts...)
-	client.pdfService = internal.NewPDFService(pdfOpts...)
+	client.articleService = internal.NewArticleService(
+		internal.WithArticleHTTPClient(client.httpClient),
+		internal.WithArticleBaseURL(client.baseURL),
+		internal.WithArticleUserAgent(client.userAgent),
+	)
+	client.searchService = internal.NewSearchService(
+		internal.WithSearchHTTPClient(client.httpClient),
+		internal.WithSearchBaseURL(client.baseURL),
+		internal.WithSearchUserAgent(client.userAgent),
+	)
+	client.pdfService = internal.NewPDFService(
+		internal.WithPDFHTTPClient(client.httpClient),
+		internal.WithPDFArticleService(client.articleService),
+	)
 
 	return client, nil
 }

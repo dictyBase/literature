@@ -13,6 +13,7 @@ import (
 type SearchService struct {
 	httpClient *http.Client
 	baseURL    string
+	userAgent  string
 	identity   Identity
 }
 
@@ -22,7 +23,27 @@ type SearchServiceOption func(*SearchService)
 // WithSearchHTTPClient sets a custom HTTP client for the search service.
 func WithSearchHTTPClient(client *http.Client) SearchServiceOption {
 	return func(s *SearchService) {
-		s.httpClient = client
+		if client != nil {
+			s.httpClient = client
+		}
+	}
+}
+
+// WithSearchBaseURL sets the base URL for E-utilities requests.
+func WithSearchBaseURL(baseURL string) SearchServiceOption {
+	return func(s *SearchService) {
+		if baseURL != "" {
+			s.baseURL = baseURL
+		}
+	}
+}
+
+// WithSearchUserAgent sets the User-Agent header for E-utilities requests.
+func WithSearchUserAgent(userAgent string) SearchServiceOption {
+	return func(s *SearchService) {
+		if userAgent != "" {
+			s.userAgent = userAgent
+		}
 	}
 }
 
@@ -78,9 +99,16 @@ func (s *SearchService) SearchPubMed(
 	limit, offset int,
 ) (*ESearchResult, error) {
 	esearchURL := s.esearchRequestURL(query, limit, offset)
+	request, err := http.NewRequest(http.MethodGet, esearchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating esearch request: %w", err)
+	}
+	if s.userAgent != "" {
+		request.Header.Set("User-Agent", s.userAgent)
+	}
 
 	// #nosec G107
-	resp, err := s.httpClient.Get(esearchURL)
+	resp, err := s.httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error making esearch request: %w", err)
 	}
@@ -100,9 +128,16 @@ func (s *SearchService) FetchPubMedDetails(
 	limit, offset int,
 ) (*PubMedArticleSet, error) {
 	efetchURL := s.efetchRequestURL(webEnv, queryKey, limit, offset)
+	request, err := http.NewRequest(http.MethodGet, efetchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating efetch request: %w", err)
+	}
+	if s.userAgent != "" {
+		request.Header.Set("User-Agent", s.userAgent)
+	}
 
 	// #nosec G107
-	resp, err := s.httpClient.Get(efetchURL)
+	resp, err := s.httpClient.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("error making efetch request: %w", err)
 	}
