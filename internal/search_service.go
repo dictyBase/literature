@@ -108,7 +108,7 @@ func (s *SearchService) SearchPubMed(
 	esearchURL := s.esearchRequestURL(query, limit, offset)
 	request, err := http.NewRequest(http.MethodGet, esearchURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating esearch request: %w", err)
+		return nil, fmt.Errorf("error creating esearch request: %w", redactAPIKey(err))
 	}
 	if s.userAgent != "" {
 		request.Header.Set("User-Agent", s.userAgent)
@@ -117,7 +117,7 @@ func (s *SearchService) SearchPubMed(
 	// #nosec G107
 	resp, err := s.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("error making esearch request: %w", err)
+		return nil, fmt.Errorf("error making esearch request: %w", redactAPIKey(err))
 	}
 	defer resp.Body.Close()
 
@@ -137,7 +137,7 @@ func (s *SearchService) FetchPubMedDetails(
 	efetchURL := s.efetchRequestURL(webEnv, queryKey, limit, offset)
 	request, err := http.NewRequest(http.MethodGet, efetchURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating efetch request: %w", err)
+		return nil, fmt.Errorf("error creating efetch request: %w", redactAPIKey(err))
 	}
 	if s.userAgent != "" {
 		request.Header.Set("User-Agent", s.userAgent)
@@ -146,7 +146,7 @@ func (s *SearchService) FetchPubMedDetails(
 	// #nosec G107
 	resp, err := s.httpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("error making efetch request: %w", err)
+		return nil, fmt.Errorf("error making efetch request: %w", redactAPIKey(err))
 	}
 	defer resp.Body.Close()
 

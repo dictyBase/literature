@@ -87,7 +87,7 @@ func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
 		return nil, &PDFError{
 			PMID: pmid,
 			Type: PDFErrorArticleNotFound,
-			Err:  fmt.Errorf("error creating efetch request: %w", err),
+			Err:  fmt.Errorf("error creating efetch request: %w", redactAPIKey(err)),
 		}
 	}
 	if s.userAgent != "" {
@@ -100,7 +100,7 @@ func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
 		return nil, &PDFError{
 			PMID: pmid,
 			Type: PDFErrorArticleNotFound,
-			Err:  fmt.Errorf("error making efetch request: %w", err),
+			Err:  fmt.Errorf("error making efetch request: %w", redactAPIKey(err)),
 		}
 	}
 	defer resp.Body.Close()
