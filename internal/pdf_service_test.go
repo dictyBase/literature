@@ -99,9 +99,15 @@ func newTestPDFService(
 	efetchServer := httptest.NewServer(mockEfetchHandler())
 	s3Server := httptest.NewServer(s3handler)
 
-	service := NewPDFService(WithHTTPClient(s3Server.Client()))
+	articleService := NewArticleService(
+		WithArticleHTTPClient(efetchServer.Client()),
+		WithArticleBaseURL(efetchServer.URL),
+	)
+	service := NewPDFService(
+		WithPDFHTTPClient(s3Server.Client()),
+		WithPDFArticleService(articleService),
+	)
 	service.pdfBaseURL = s3Server.URL
-	service.articleService.baseURL = efetchServer.URL
 
 	return service, efetchServer, s3Server
 }
@@ -130,14 +136,20 @@ func TestNewPDFService(t *testing.T) {
 	)
 }
 
-func TestWithHTTPClient(t *testing.T) {
+func TestWithPDFHTTPClient(t *testing.T) {
 	t.Parallel()
 	req := require.New(t)
 	customClient := &http.Client{Timeout: 10 * time.Second}
-	service := NewPDFService(WithHTTPClient(customClient))
+	articleClient := &http.Client{Timeout: 20 * time.Second}
+	articleService := NewArticleService(WithArticleHTTPClient(articleClient))
+	service := NewPDFService(
+		WithPDFHTTPClient(customClient),
+		WithPDFArticleService(articleService),
+	)
 
-	req.Equal(customClient, service.httpClient)
-	req.Equal(customClient, service.articleService.httpClient)
+	req.Same(customClient, service.httpClient)
+	req.Same(articleService, service.articleService)
+	req.Same(articleClient, service.articleService.httpClient)
 }
 
 func TestResolvePDFURL_V1Success(t *testing.T) {

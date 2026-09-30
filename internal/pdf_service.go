@@ -30,11 +30,21 @@ type PDFService struct {
 // PDFServiceOption configures PDFService behavior.
 type PDFServiceOption func(*PDFService)
 
-// WithHTTPClient sets a custom HTTP client for the PDF service.
-func WithHTTPClient(client *http.Client) PDFServiceOption {
+// WithPDFHTTPClient sets a custom HTTP client for the PDF service.
+func WithPDFHTTPClient(client *http.Client) PDFServiceOption {
 	return func(s *PDFService) {
-		s.httpClient = client
-		s.articleService.httpClient = client
+		if client != nil {
+			s.httpClient = client
+		}
+	}
+}
+
+// WithPDFArticleService injects a preconfigured ArticleService.
+func WithPDFArticleService(service *ArticleService) PDFServiceOption {
+	return func(pdfService *PDFService) {
+		if service != nil {
+			pdfService.articleService = service
+		}
 	}
 }
 
