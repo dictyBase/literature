@@ -128,6 +128,8 @@ func (c *Client) Search(
 	articleSet, err := c.searchService.FetchPubMedDetails(
 		searchResult.WebEnv,
 		searchResult.QueryKey,
+		config.limit,
+		config.offset,
 	)
 	if err != nil {
 		return nil, err
