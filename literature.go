@@ -17,6 +17,9 @@ type Client struct {
 	httpClient     *http.Client
 	baseURL        string
 	userAgent      string
+	apiKey         string
+	tool           string
+	email          string
 	validate       *validator.Validate
 }
 
@@ -36,13 +39,21 @@ func New(opts ...Option) (*Client, error) {
 		}
 	}
 
+	identity := internal.Identity{
+		APIKey: client.apiKey,
+		Tool:   client.tool,
+		Email:  client.email,
+	}
+
 	client.articleService = internal.NewArticleService(
 		internal.WithArticleHTTPClient(client.httpClient),
+		internal.WithArticleIdentity(identity),
 		internal.WithArticleBaseURL(client.baseURL),
 		internal.WithArticleUserAgent(client.userAgent),
 	)
 	client.searchService = internal.NewSearchService(
 		internal.WithSearchHTTPClient(client.httpClient),
+		internal.WithSearchIdentity(identity),
 		internal.WithSearchBaseURL(client.baseURL),
 		internal.WithSearchUserAgent(client.userAgent),
 	)
