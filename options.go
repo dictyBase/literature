@@ -52,6 +52,43 @@ func WithUserAgent(userAgent string) Option {
 	}
 }
 
+// WithAPIKey sets the NCBI API key sent on every E-utilities request.
+// Empty by default: callers should provide their own key.
+func WithAPIKey(apiKey string) Option {
+	return func(c *Client) error {
+		c.apiKey = apiKey
+		return nil
+	}
+}
+
+// WithTool sets the tool parameter identifying the software making requests.
+func WithTool(tool string) Option {
+	return func(client *Client) error {
+		if err := client.validate.Var(tool, "omitempty,excludesall= "); err != nil {
+			return &Error{
+				Type:    ErrorTypeInvalidInput,
+				Message: "tool must not contain spaces",
+			}
+		}
+		client.tool = tool
+		return nil
+	}
+}
+
+// WithEmail sets the developer contact email sent on every E-utilities request.
+func WithEmail(email string) Option {
+	return func(client *Client) error {
+		if err := client.validate.Var(email, "omitempty,email"); err != nil {
+			return &Error{
+				Type:    ErrorTypeInvalidInput,
+				Message: "email must be a valid address",
+			}
+		}
+		client.email = email
+		return nil
+	}
+}
+
 // WithRetryPolicy sets retry behavior for failed requests.
 // maxRetries specifies the maximum number of retry attempts.
 // retryDelay specifies the delay between retries.

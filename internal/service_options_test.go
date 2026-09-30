@@ -56,6 +56,11 @@ func TestSearchPubMed_UserAgent(t *testing.T) {
 
 func TestPDFService_UsesInjectedArticleService(t *testing.T) {
 	t.Parallel()
+	const (
+		apiValue = "pdf-injected-identity"
+		tool     = "pdf-injected-tool"
+		email    = "pdf@example.org"
+	)
 	queries := make(chan url.Values, 1)
 	mockArticleHandler := mockEfetchHandler()
 	efetchServer := httptest.NewServer(http.HandlerFunc(
@@ -72,6 +77,11 @@ func TestPDFService_UsesInjectedArticleService(t *testing.T) {
 	articleService := NewArticleService(
 		WithArticleHTTPClient(articleHTTPClient),
 		WithArticleBaseURL(efetchServer.URL),
+		WithArticleIdentity(Identity{
+			APIKey: apiValue,
+			Tool:   tool,
+			Email:  email,
+		}),
 	)
 	pdfHTTPClient := s3Server.Client()
 	service := NewPDFService(
@@ -87,5 +97,9 @@ func TestPDFService_UsesInjectedArticleService(t *testing.T) {
 	req.Same(articleService, service.articleService)
 	req.Same(pdfHTTPClient, service.httpClient)
 	req.Same(articleHTTPClient, service.articleService.httpClient)
-	req.Equal(testPMID, (<-queries).Get("id"))
+	query := <-queries
+	req.Equal(testPMID, query.Get("id"))
+	req.Equal(apiValue, query.Get("api_key"))
+	req.Equal(tool, query.Get("tool"))
+	req.Equal(email, query.Get("email"))
 }

@@ -47,6 +47,13 @@ func WithSearchUserAgent(userAgent string) SearchServiceOption {
 	}
 }
 
+// WithSearchIdentity sets NCBI E-utilities identification parameters.
+func WithSearchIdentity(identity Identity) SearchServiceOption {
+	return func(service *SearchService) {
+		service.identity = identity
+	}
+}
+
 // NewSearchService creates a new SearchService with the given options.
 func NewSearchService(options ...SearchServiceOption) *SearchService {
 	service := &SearchService{

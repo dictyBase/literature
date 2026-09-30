@@ -48,6 +48,13 @@ func WithArticleUserAgent(userAgent string) ArticleServiceOption {
 	}
 }
 
+// WithArticleIdentity sets NCBI E-utilities identification parameters.
+func WithArticleIdentity(identity Identity) ArticleServiceOption {
+	return func(service *ArticleService) {
+		service.identity = identity
+	}
+}
+
 // NewArticleService creates a new ArticleService with default configuration.
 func NewArticleService(options ...ArticleServiceOption) *ArticleService {
 	service := &ArticleService{
