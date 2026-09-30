@@ -16,7 +16,7 @@ metadata and citation analytics.
 ### Core Literature Access
 - 🔍 **Advanced Search**: Comprehensive literature search with natural language and structured queries
 - 📄 **Article Retrieval**: Fetch detailed article metadata by PMID with rich information
-- 📚 **Batch Operations**: Efficient processing of multiple articles simultaneously
+- 📚 **Multi-Article Retrieval**: Fetch many PMIDs in one call; one sequential request per PMID
 - 🔗 **Full-Text Access**: PDF and full-text availability checking and URL retrieval
 - 🔄 **Related Articles**: Discover similar articles and citations
 
@@ -200,7 +200,7 @@ client, err := literature.New(
 ### Core Methods
 
 - `GetArticle(pmid string) (*Article, error)` - Fetch single article
-- `GetArticles(pmids []string) ([]*Article, error)` - Fetch multiple articles
+- `GetArticles(pmids []string) ([]*Article, error)` - Fetch multiple articles sequentially (one request per PMID)
 - `Search(query string, opts ...SearchOption) (*SearchResult, error)` - Search articles
 - `FindSimilar(pmid string, opts ...SearchOption) (*SearchResult, error)` - Find similar articles
 - `GetPDF(pmid string) (*PDF, error)` - Get PDF information
@@ -317,7 +317,7 @@ client, err := literature.NewEuropePMCClient(
 
 - `GetArticle(pmid string) (*EuropePMCArticle, error)` - Fetch single article with comprehensive metadata
 - `GetArticleByDOI(doi string) (*EuropePMCArticle, error)` - Fetch article directly by DOI
-- `GetArticles(pmids []string) ([]*EuropePMCArticle, error)` - Fetch multiple articles efficiently
+- `GetArticles(pmids []string) ([]*EuropePMCArticle, error)` - Fetch multiple articles sequentially (one request per PMID)
 - `Search(query string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Advanced literature search
 - `FindSimilar(pmid string, opts ...EuropePMCSearchOption) (*EuropePMCSearchResult, error)` - Find related articles
 - `HasPDF(pmid string) (bool, error)` - Check PDF availability
@@ -775,7 +775,7 @@ if err != nil {
 
 ## Thread Safety
 
-Both clients are safe for concurrent use across multiple goroutines. All methods can be called from different goroutines simultaneously.
+PubMed article fetches and searches can run concurrently on one `Client`. PDF workflow methods (`HasPDF`, `GetPDF`, and `DownloadPDF`) share cached state; do not overlap PDF workflows on the same client. Use separate clients for concurrent PDF workflows.
 
 ```go
 // Safe to use from multiple goroutines
@@ -801,7 +801,7 @@ wg.Wait()
 ## Rate Limiting
 
 ### PubMed Rate Limits
-NCBI's default E-utilities limits are 3 requests per second per IP address without an API key and 10 requests per second with a key. Send `tool` and `email` on every request. The `literature` client does not throttle PubMed requests; callers must keep aggregate traffic from their processes within NCBI's limits. A `Search` call makes two E-utilities requests.
+NCBI's default E-utilities limits are 3 requests per second per IP address without an API key and 10 requests per second with a key. Send `tool` and `email` on every request. The `literature` client does not throttle PubMed requests; callers must keep aggregate traffic from their processes within NCBI's limits. Each `Search` or `FindSimilar` call makes two E-utilities requests. `GetArticles(n)` makes `n` sequential efetch requests; count every request toward the rate limit.
 
 For rates above 10 requests per second, request approval from NCBI. See the [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
 
@@ -809,7 +809,7 @@ For rates above 10 requests per second, request approval from NCBI. See the [E-u
 The EuropePMC client does not currently implement rate limiting or retries. `WithEuropePMCRateLimit` and `WithEuropePMCRetryPolicy` are placeholders and have no effect. Follow [EuropePMC's service guidance](https://europepmc.org/RestfulWebService) and manage request pacing in the caller.
 
 **Best Practices:**
-- Use batch operations (`GetArticles`) when fetching multiple articles
+- Use `GetArticles` for convenience when fetching multiple articles, but budget one sequential request per PMID; it does not combine IDs into one API call
 - Cache results when possible to reduce API calls
 - Monitor rate limit headers in API responses
 - Implement exponential backoff for failed requests
@@ -821,18 +821,17 @@ The EuropePMC client does not currently implement rate limiting or retries. `Wit
 The library is optimized for performance with the following characteristics:
 
 - **Single Article Fetch**: ~200-500ms (network dependent)
-- **Batch Operations**: ~50-100ms per article in batch
+- **Multi-Article Fetch**: ~50-100ms per article (one sequential request per PMID)
 - **Memory Usage**: ~1-5MB per 1000 articles (depending on metadata richness)
-- **Concurrent Safety**: Lock-free operations, scales with goroutines
+- **Concurrent Requests**: Article and search calls are concurrent-safe; PDF workflows require separate clients for concurrency
 
 ### Optimization Tips
 
 ```go
-// Prefer batch operations for multiple articles
-// Efficient: Single API call
+// Convenience grouping; still sends one sequential request per PMID.
 articles, err := client.GetArticles([]string{"12345678", "87654321", "11111111"})
 
-// Less efficient: Multiple API calls
+// Calling GetArticle separately sends the same number of requests.
 for _, pmid := range pmids {
     article, err := client.GetArticle(pmid)
     // ...
