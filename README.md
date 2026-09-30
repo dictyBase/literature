@@ -71,9 +71,11 @@ Choose the API that best fits your research needs:
 | **DOI Support** | Extract from articles | Direct retrieval by DOI |
 | **Funding Data** | No | Yes (grants, agencies) |
 | **Open Access** | Basic detection | Enhanced licensing info |
-| **Rate Limits** | 3 req/sec | 10 req/sec (configurable) |
-| **Built-in Rate Limiting** | No | Yes |
-| **Retry Logic** | No | Yes |
+| **Rate Limits** | 3 req/sec without key; 10 req/sec with key | Follow EuropePMC service guidance |
+| **Built-in Rate Limiting** | No | No |
+| **Retry Logic** | No | No |
+
+The EuropePMC client's `WithEuropePMCRateLimit` and `WithEuropePMCRetryPolicy` options currently have no effect; the client does not throttle or retry requests.
 
 ### PubMed (NCBI eUtils) 
 
@@ -229,6 +231,27 @@ if doi, hasDOI := article.GetDOI(); hasDOI {
 - `WithTimeout(timeout time.Duration)` - Request timeout
 - `WithBaseURL(url string)` - Custom API base URL (for testing)
 - `WithUserAgent(userAgent string)` - Custom User-Agent header
+- `WithAPIKey(apiKey string)` - Send your own NCBI API key as `api_key`; no key is bundled
+- `WithTool(tool string)` - Identify your application; value must contain no spaces
+- `WithEmail(email string)` - Send a valid developer contact email
+
+NCBI recommends including `tool` and `email` with every E-utilities request. The library does not read environment variables; callers can source values themselves:
+
+```go
+import (
+    "os"
+
+    "github.com/dictybase/literature"
+)
+
+client, err := literature.New(
+    literature.WithAPIKey(os.Getenv("NCBI_API_KEY")),
+    literature.WithTool("my-tool"),
+    literature.WithEmail(os.Getenv("NCBI_EMAIL")),
+)
+```
+
+An empty `NCBI_API_KEY` omits `api_key`, so NCBI's no-key limit applies. See [NCBI API key instructions](https://www.ncbi.nlm.nih.gov/books/NBK25501/) and [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
 
 #### Search Options
 
@@ -287,8 +310,6 @@ client, err := literature.NewEuropePMCClient(
     literature.WithEuropePMCTimeout(60*time.Second),
     literature.WithEuropePMCUserAgent("MyApp/1.0"),
     literature.WithEuropePMCEmail("contact@myapp.com"),
-    literature.WithEuropePMCRetryPolicy(5, 2*time.Second),
-    literature.WithEuropePMCRateLimit(5.0), // 5 requests per second
 )
 ```
 
@@ -330,8 +351,8 @@ fmt.Printf("DOI: %s\n", article.DOI)
 - `WithEuropePMCBaseURL(url string)` - Custom API base URL (for testing)
 - `WithEuropePMCUserAgent(userAgent string)` - Custom User-Agent header
 - `WithEuropePMCEmail(email string)` - Contact email for high-volume usage
-- `WithEuropePMCRetryPolicy(maxRetries int, retryDelay time.Duration)` - Retry configuration
-- `WithEuropePMCRateLimit(requestsPerSecond float64)` - Rate limiting
+- `WithEuropePMCRetryPolicy(maxRetries int, retryDelay time.Duration)` - Placeholder; currently has no effect
+- `WithEuropePMCRateLimit(requestsPerSecond float64)` - Placeholder; currently has no effect
 - `WithEuropePMCDefaultResultType(resultType string)` - Default result type ("core", "lite")
 - `WithEuropePMCDefaultFormat(format string)` - Default response format ("json", "xml")
 
@@ -780,24 +801,12 @@ wg.Wait()
 ## Rate Limiting
 
 ### PubMed Rate Limits
-NCBI requests that users:
-- Make no more than 3 requests per second for E-utilities
-- Use the `tool` and `email` parameters for identification
-- Consider using the History Server for large batch operations
+NCBI's default E-utilities limits are 3 requests per second per IP address without an API key and 10 requests per second with a key. Send `tool` and `email` on every request. The `literature` client does not throttle PubMed requests; callers must keep aggregate traffic from their processes within NCBI's limits. A `Search` call makes two E-utilities requests.
+
+For rates above 10 requests per second, request approval from NCBI. See the [E-utilities usage policies](https://www.ncbi.nlm.nih.gov/books/NBK25497/).
 
 ### EuropePMC Rate Limits
-The EuropePMC client includes built-in rate limiting:
-- Default: 10 requests per second
-- Configurable via `WithEuropePMCRateLimit(float64)`
-- Automatically handles retry with exponential backoff
-
-```go
-// Configure rate limiting for EuropePMC
-client, err := literature.NewEuropePMCClient(
-    literature.WithEuropePMCRateLimit(5.0), // 5 requests per second
-    literature.WithEuropePMCRetryPolicy(5, 2*time.Second),
-)
-```
+The EuropePMC client does not currently implement rate limiting or retries. `WithEuropePMCRateLimit` and `WithEuropePMCRetryPolicy` are placeholders and have no effect. Follow [EuropePMC's service guidance](https://europepmc.org/RestfulWebService) and manage request pacing in the caller.
 
 **Best Practices:**
 - Use batch operations (`GetArticles`) when fetching multiple articles
@@ -833,11 +842,8 @@ for _, pmid := range pmids {
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
-// EuropePMC: Configure appropriate rate limiting
-client, err := literature.NewEuropePMCClient(
-    literature.WithEuropePMCRateLimit(5.0), // Adjust based on usage patterns
-    literature.WithEuropePMCRetryPolicy(3, time.Second),
-)
+// EuropePMC rate-limit and retry options currently have no effect;
+// callers must manage request pacing and retries.
 ```
 
 ### Memory Management
