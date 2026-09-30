@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -12,10 +13,7 @@ import (
 type SearchService struct {
 	httpClient *http.Client
 	baseURL    string
-	esearchURL string
-	efetchURL  string
-	retmax     int
-	retstart   int
+	identity   Identity
 }
 
 // SearchServiceOption configures SearchService behavior.
@@ -28,25 +26,12 @@ func WithSearchHTTPClient(client *http.Client) SearchServiceOption {
 	}
 }
 
-// WithRetrieval sets the maximum number of results and the starting index.
-func WithRetrieval(retmax, retstart int) SearchServiceOption {
-	return func(s *SearchService) {
-		s.retmax = retmax
-		s.retstart = retstart
-		s.buildURLs()
-	}
-}
-
 // NewSearchService creates a new SearchService with the given options.
 func NewSearchService(options ...SearchServiceOption) *SearchService {
 	service := &SearchService{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    eutilsBaseURL,
-		retmax:     10, // default value
-		retstart:   0,  // default value
 	}
-
-	service.buildURLs()
 
 	for _, option := range options {
 		option(service)
@@ -55,20 +40,36 @@ func NewSearchService(options ...SearchServiceOption) *SearchService {
 	return service
 }
 
-// rebuildURLs rebuilds the esearch and efetch URLs with the current retmax value.
-func (s *SearchService) buildURLs() {
-	s.esearchURL = fmt.Sprintf(
-		"%s/esearch.fcgi?db=pubmed&retmax=%d&retstart=%d&retmode=xml&usehistory=y",
-		s.baseURL,
-		s.retmax,
-		s.retstart,
-	)
-	s.efetchURL = fmt.Sprintf(
-		"%s/efetch.fcgi?db=pubmed&retmode=xml&retmax=%d&retstart=%d",
-		s.baseURL,
-		s.retmax,
-		s.retstart,
-	)
+func (s *SearchService) esearchRequestURL(
+	query string,
+	limit, offset int,
+) string {
+	values := url.Values{}
+	values.Set("db", "pubmed")
+	values.Set("retmode", "xml")
+	values.Set("usehistory", "y")
+	values.Set("retmax", strconv.Itoa(limit))
+	values.Set("retstart", strconv.Itoa(offset))
+	values.Set("term", query)
+	s.identity.Apply(values)
+
+	return s.baseURL + "/esearch.fcgi?" + values.Encode()
+}
+
+func (s *SearchService) efetchRequestURL(
+	webEnv, queryKey string,
+	limit, offset int,
+) string {
+	values := url.Values{}
+	values.Set("db", "pubmed")
+	values.Set("retmode", "xml")
+	values.Set("retmax", strconv.Itoa(limit))
+	values.Set("retstart", strconv.Itoa(offset))
+	values.Set("WebEnv", webEnv)
+	values.Set("query_key", queryKey)
+	s.identity.Apply(values)
+
+	return s.baseURL + "/efetch.fcgi?" + values.Encode()
 }
 
 // SearchPubMed performs a search query against PubMed and returns search results.
@@ -76,14 +77,7 @@ func (s *SearchService) SearchPubMed(
 	query string,
 	limit, offset int,
 ) (*ESearchResult, error) {
-	s.retmax = limit
-	s.retstart = offset
-	s.buildURLs()
-	esearchURL := fmt.Sprintf(
-		"%s&term=%s",
-		s.esearchURL,
-		url.QueryEscape(query),
-	)
+	esearchURL := s.esearchRequestURL(query, limit, offset)
 
 	// #nosec G107
 	resp, err := s.httpClient.Get(esearchURL)
@@ -103,13 +97,9 @@ func (s *SearchService) SearchPubMed(
 // FetchPubMedDetails retrieves detailed article information using WebEnv and QueryKey.
 func (s *SearchService) FetchPubMedDetails(
 	webEnv, queryKey string,
+	limit, offset int,
 ) (*PubMedArticleSet, error) {
-	efetchURL := fmt.Sprintf(
-		"%s&WebEnv=%s&query_key=%s",
-		s.efetchURL,
-		webEnv,
-		queryKey,
-	)
+	efetchURL := s.efetchRequestURL(webEnv, queryKey, limit, offset)
 
 	// #nosec G107
 	resp, err := s.httpClient.Get(efetchURL)

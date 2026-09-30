@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -11,6 +12,7 @@ import (
 type ArticleService struct {
 	httpClient *http.Client
 	baseURL    string
+	identity   Identity
 }
 
 const eutilsBaseURL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -23,13 +25,19 @@ func NewArticleService() *ArticleService {
 	}
 }
 
+func (s *ArticleService) efetchURL(pmid string) string {
+	values := url.Values{}
+	values.Set("db", "pubmed")
+	values.Set("retmode", "xml")
+	values.Set("id", pmid)
+	s.identity.Apply(values)
+
+	return s.baseURL + "/efetch.fcgi?" + values.Encode()
+}
+
 // FetchArticle retrieves article metadata for the given PMID.
 func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
-	efetchURL := fmt.Sprintf(
-		"%s/efetch.fcgi?db=pubmed&retmode=xml&id=%s",
-		s.baseURL,
-		pmid,
-	)
+	efetchURL := s.efetchURL(pmid)
 
 	// #nosec G107
 	resp, err := s.httpClient.Get(efetchURL)
