@@ -12,6 +12,8 @@ import (
 	S "github.com/IBM/fp-go/v2/string"
 )
 
+// fp-go:allow-trivial-delegate Reused by both EuropePMC and PubMed
+// download tails as the target-filename domain operation.
 func targetFilename(st State) string {
 	return F.Pipe1(
 		st.OutputFile,

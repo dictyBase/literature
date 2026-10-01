@@ -9,7 +9,9 @@ import (
 func TestPipelineContinuity(t *testing.T) {
 	t.Parallel()
 	pipelinecheck.Require(t, pipelinecheck.Config{
-		Roots:                []string{"."},
-		RequirePointFreeSeed: true,
+		Roots:                     []string{"."},
+		RequirePointFreeSeed:      true,
+		RequirePointFreeBranching: true,
+		RequireTrivialDelegate:    true,
 	})
 }
