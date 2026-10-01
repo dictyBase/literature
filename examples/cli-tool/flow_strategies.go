@@ -28,7 +28,7 @@ func executePubMedFlow(st State) IOE.IOEither[error, State] {
 		),
 		IOE.Chain(fetchPubMedArticle),
 		IOE.ChainFirstIOK[error](logPubMedArticle),
-		IOE.Chain(processPubMedFlow),
+		IOE.Chain(pubMedDownloadTail),
 	)
 }
 

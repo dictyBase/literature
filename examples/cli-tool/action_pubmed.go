@@ -16,21 +16,20 @@ func fetchPubMedArticle(state State) IOE.IOEither[error, State] {
 		IOE.TryCatchError(func() (*literature.Article, error) {
 			return state.PubMed.GetArticle(state.Identifier)
 		}),
-		IOE.Map[error](func(a *literature.Article) State {
-			return pubMedArticleLens.Set(a)(state)
-		}),
+		IOE.Map[error](storeArticleWithPMID(state)),
 	)
 }
 
-func processPubMedFlow(st State) IOE.IOEither[error, State] {
-	return F.Pipe1(
-		pmidLens.Set(st.PubMedArticle.PMID)(st),
-		pubMedDownloadTail,
-	)
+// storeArticleWithPMID stores the fetched article and its PMID on the
+// state so the shared download tail can run.
+func storeArticleWithPMID(state State) func(*literature.Article) State {
+	return func(article *literature.Article) State {
+		return pmidLens.Set(article.PMID)(pubMedArticleLens.Set(article)(state))
+	}
 }
 
 // pubMedDownloadTail is the shared PubMed availability-check + download
-// pipeline, reused by fallbackEurope and processPubMedFlow.
+// pipeline, reused by fallbackEurope and executePubMedFlow.
 func pubMedDownloadTail(st State) IOE.IOEither[error, State] {
 	return F.Pipe3(
 		IOE.Of[error](st),
