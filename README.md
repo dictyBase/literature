@@ -7,9 +7,10 @@
 [![Funding](https://badgen.net/badge/Funding/Rex%20L%20Chisholm,dictyBase,DCR/yellow?list=|)](https://projectreporter.nih.gov/project_info_description.cfm?aid=10024726&icde=0)
 
 A production-ready, idiomatic Go library for accessing scientific literature
-through multiple APIs. Supports both PubMed (NCBI eUtils) for authoritative
-biomedical research and EuropePMC for enhanced European content with rich
-metadata and citation analytics.
+through multiple APIs. Supports PubMed (NCBI eUtils) for authoritative
+biomedical research, EuropePMC for enhanced European content with rich
+metadata and citation analytics, and OpenAlex for the full scholarly catalog
+with citation impact metrics and citation networks.
 
 ## Features
 
@@ -45,6 +46,17 @@ metadata and citation analytics.
 - 🆓 **Open Access Focus**: Enhanced open access detection and licensing information
 - 🌍 **Multi-Language Support**: Better support for non-English European literature
 
+#### OpenAlex - Distinctive Features
+- 🌐 **Full Catalog**: Access to 250M+ scholarly works across all disciplines
+- 🔢 **Multiple Identifiers**: Direct retrieval by OpenAlex ID (W...), PMID, or DOI
+- 📊 **Citation Impact**: Citation counts, Field-Weighted Citation Impact (FWCI), and normalized percentiles
+- 🕸️ **Citation Graph**: Works cited by an article and paginated citing works
+- 🧭 **Topic Taxonomy**: Hierarchical topic classifications (Domain -> Field -> Subfield -> Topic)
+- 🏦 **Institutional RORs**: Author affiliations with institutional ROR IDs and verified ORCIDs
+- 💸 **Funding Data**: Grant acknowledgments with funder ROR and award IDs
+- 📬 **Polite Pool**: Free faster rate limits with a contact email (`WithOpenAlexEmail`)
+- 🔑 **Premium Support**: OpenAlex Premium API key with automatic error URL redaction
+
 ## Installation
 
 ```bash
@@ -60,20 +72,20 @@ Choose the API that best fits your research needs:
 
 ## API Comparison
 
-| Feature | PubMed (NCBI eUtils) | EuropePMC |
-|---------|---------------------|------------|
-| **Data Source** | NCBI PubMed | European PMC Database |
-| **Coverage** | 35M+ citations | 37M+ citations |
-| **Best For** | Biomedical research | European research + broader coverage |
-| **Author Info** | Basic | Rich (ORCID, affiliations) |
-| **Citation Metrics** | No | Yes (real-time counts) |
-| **Full Text Access** | PDF | Enhanced PDF/HTML/XML |
-| **DOI Support** | Extract from articles | Direct retrieval by DOI |
-| **Funding Data** | No | Yes (grants, agencies) |
-| **Open Access** | Basic detection | Enhanced licensing info |
-| **Rate Limits** | 3 req/sec without key; 10 req/sec with key | Follow EuropePMC service guidance |
-| **Built-in Rate Limiting** | No | No |
-| **Retry Logic** | No | No |
+| Feature | PubMed (NCBI eUtils) | EuropePMC | OpenAlex |
+|---------|---------------------|-----------|----------|
+| **Data Source** | NCBI PubMed | European PMC Database | OpenAlex catalog (250M+ works) |
+| **Coverage** | 35M+ citations | 37M+ citations | 250M+ works, all disciplines |
+| **Best For** | Biomedical research | European research + broader coverage | Citation analysis and metadata enrichment |
+| **Author Info** | Basic | Rich (ORCID, affiliations) | Rich (ORCID, institutional RORs) |
+| **Citation Metrics** | No | Yes (real-time counts) | Yes (counts, FWCI, percentiles) |
+| **Full Text Access** | PDF | Enhanced PDF/HTML/XML | Open access URLs and licenses |
+| **DOI Support** | Extract from articles | Direct retrieval by DOI | Direct retrieval by DOI |
+| **Funding Data** | No | Yes (grants, agencies) | Yes (funder ROR, award IDs) |
+| **Open Access** | Basic detection | Enhanced licensing info | OA status, license, PDF URLs |
+| **Rate Limits** | 3 req/sec without key; 10 req/sec with key | Follow EuropePMC service guidance | 10 req/sec polite pool; Premium with key |
+| **Built-in Rate Limiting** | No | No | No |
+| **Retry Logic** | No | No | No |
 
 The EuropePMC client's `WithEuropePMCRateLimit` and `WithEuropePMCRetryPolicy` options currently have no effect; the client does not throttle or retry requests.
 
@@ -171,6 +183,11 @@ func main() {
   - [Core Methods](#europepmc-core-methods)
   - [Search Options](#europepmc-search-options)
   - [Examples](#europepmc-examples)
+- [OpenAlex API](#openalex-api)
+  - [Configuration](#openalex-configuration)
+  - [Core Methods](#openalex-core-methods)
+  - [Search Options](#openalex-search-options)
+  - [Examples](#openalex-examples)
 - [Types and Data Structures](#types-and-data-structures)
 - [Error Handling](#error-handling-1)
 - [Thread Safety](#thread-safety)
@@ -522,6 +539,151 @@ if err != nil {
             fmt.Printf("EuropePMC API error: %s\n", litErr.Message)
         case literature.ErrorTypeNetworkError:
             fmt.Println("Network error - check connection")
+        }
+    }
+}
+```
+
+## OpenAlex API
+
+The OpenAlex client provides access to the full OpenAlex catalog of scholarly works with citation impact metrics, topic classifications, and citation networks.
+
+### OpenAlex Configuration
+
+Customize the OpenAlex client with various options:
+
+```go
+client, err := literature.NewOpenAlexClient(
+    literature.WithOpenAlexEmail("contact@myapp.com"),   // "Polite Pool" (free, faster)
+    literature.WithOpenAlexAPIKey("your-api-key"),       // OpenAlex Premium
+    literature.WithOpenAlexTimeout(60*time.Second),
+    literature.WithOpenAlexUserAgent("MyApp/1.0"),
+)
+```
+
+When an API key is set, it is automatically redacted from error strings produced by failed HTTP requests.
+
+### OpenAlex Core Methods
+
+- `GetWork(id string) (*OpenAlexWork, error)` - Fetch a single work by OpenAlex ID (W...), PMID (`PMID:12345678`), or DOI
+- `GetWorkByPMID(pmid string) (*OpenAlexWork, error)` - Fetch a single work by PubMed ID
+- `GetWorkByDOI(doi string) (*OpenAlexWork, error)` - Fetch a single work by DOI (`doi:` and `https://doi.org/` prefixes accepted)
+- `GetWorks(ids []string) ([]*OpenAlexWork, error)` - Batch lookup by OpenAlex IDs in a single request
+- `GetWorksByPMIDs(pmids []string) ([]*OpenAlexWork, error)` - Batch lookup by PMIDs in a single request
+- `GetReferencedWorks(id string) ([]*OpenAlexWork, error)` - Resolve all works cited by an article (batched lookups)
+- `GetCitingWorks(id string, opts ...OpenAlexSearchOption) (*OpenAlexWorksResult, error)` - One page of works citing the article (`filter=cites:<id>`, paginate via the returned cursor)
+- `GetCitationMetrics(id string) (*CitationMetrics, error)` - Citation count, FWCI, and normalized percentiles
+
+### OpenAlex Search Options
+
+- `WithOpenAlexPerPage(perPage int)` - Results per page (maximum 200)
+- `WithOpenAlexCursor(cursor string)` - Pagination cursor for the next page
+- `WithOpenAlexSort(sort string)` - Sort expression (for example `cited_by_count:desc`)
+
+### OpenAlex Examples
+
+#### Identifier Resolution
+
+```go
+client, err := literature.NewOpenAlexClient(
+    literature.WithOpenAlexEmail("research@university.edu"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// By OpenAlex ID, PMID, or DOI
+work, err := client.GetWork("W2100837269")
+// or client.GetWorkByPMID("12345678")
+// or client.GetWorkByDOI("10.1038/nature12373")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Title: %s\n", work.Title)
+fmt.Printf("DOI: %s\n", work.DOI)
+fmt.Printf("Publication year: %d\n", work.PublicationYear)
+```
+
+#### Citation Metrics and Graph
+
+```go
+// Citation impact metrics
+metrics, err := client.GetCitationMetrics("W2100837269")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Cited by: %d, FWCI: %.2f\n", metrics.CitedByCount, metrics.FWCI)
+fmt.Printf("Percentiles (min/max): %.2f / %.2f\n", metrics.PercentileMin, metrics.PercentileMax)
+
+// All works cited by the article (batched lookups)
+referenced, err := client.GetReferencedWorks("W2100837269")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Cites %d works\n", len(referenced))
+
+// One page of citing works, paginated by cursor
+citing, err := client.GetCitingWorks(
+    "W2100837269",
+    literature.WithOpenAlexPerPage(25),
+    literature.WithOpenAlexSort("cited_by_count:desc"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("%d citing works, next cursor: %s\n", citing.TotalCount, citing.Cursor)
+```
+
+#### Metadata Enrichment
+
+```go
+work, err := client.GetWorkByDOI("10.1038/nature12373")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Hierarchical topics
+for _, topic := range work.Topics {
+    fmt.Printf("Topic: %s (score %.2f)\n", topic.DisplayName, topic.Score)
+    fmt.Printf("  Domain: %s -> Field: %s -> Subfield: %s\n",
+        topic.Domain.DisplayName, topic.Field.DisplayName, topic.Subfield.DisplayName)
+}
+
+// Authors with institutions and ORCIDs
+for _, authorship := range work.Authors {
+    fmt.Printf("Author: %s (%s)\n", authorship.Author.DisplayName, authorship.Author.ORCID)
+    for _, inst := range authorship.Institutions {
+        fmt.Printf("  - %s (ROR: %s)\n", inst.DisplayName, inst.ROR)
+    }
+}
+
+// Grants and funding
+for _, award := range work.Awards {
+    fmt.Printf("Funder: %s (ROR: %s), award: %s\n",
+        award.Funder.DisplayName, award.Funder.ROR, award.AwardID)
+}
+
+// Open access status
+if work.OpenAccess.IsOA {
+    fmt.Printf("OA status: %s, license: %s, PDF: %s\n",
+        work.OpenAccess.OAStatus, work.PrimaryLocation.License, work.OpenAccess.OAURL)
+}
+```
+
+#### Error Handling with OpenAlex
+
+```go
+work, err := client.GetWork("W9999999999")
+if err != nil {
+    if litErr, ok := err.(*literature.Error); ok {
+        switch litErr.Type {
+        case literature.ErrorTypeArticleNotFound:
+            fmt.Println("Work not found in OpenAlex")
+        case literature.ErrorTypeRateLimit:
+            fmt.Println("Rate limited - slow down or join the Polite Pool")
+        case literature.ErrorTypeAPIError:
+            fmt.Printf("OpenAlex API error: %s\n", litErr.Message)
         }
     }
 }
@@ -937,19 +1099,24 @@ literature/
 ├── doc.go              # Package documentation
 ├── literature.go       # Main PubMed client interface
 ├── europepmc.go        # EuropePMC client interface
+├── openalex.go         # OpenAlex client interface
 ├── types.go           # PubMed data structures
 ├── europepmc_types.go  # EuropePMC data structures
+├── openalex_types.go   # OpenAlex data structures
 ├── options.go         # PubMed configuration options
 ├── europepmc_options.go # EuropePMC configuration options
+├── openalex_options.go # OpenAlex configuration options
 ├── errors.go          # Error types and handling
 ├── adapters.go        # Internal service adapters
 ├── internal/          # Private implementation details
 │   ├── pubmed_service.go    # PubMed API client
-│   └── europepmc_service.go # EuropePMC API client
+│   ├── europepmc_service.go # EuropePMC API client
+│   └── openalex_service.go  # OpenAlex API client
 ├── examples/          # Usage examples
 │   ├── basic/         # Basic PubMed examples
 │   ├── advanced/      # Advanced PubMed examples
-│   └── europepmc/     # EuropePMC examples
+│   ├── europepmc/     # EuropePMC examples
+│   └── openalex/      # OpenAlex examples
 ├── testdata/          # Test fixtures
 └── cmd/pubmed/        # CLI tool (optional)
 ```
