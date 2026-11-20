@@ -44,7 +44,7 @@ type OpenAlexLocation struct {
 	PDFURL         string         `json:"pdf_url,omitempty"`
 	License        string         `json:"license,omitempty"`
 	Version        string         `json:"version,omitempty"`
-	Source         OpenAlexSource `json:"source,omitempty"`
+	Source         OpenAlexSource `json:"source"`
 }
 
 // OpenAlexSource represents the source (journal/repository) of a location.
@@ -83,9 +83,9 @@ type OpenAlexTopic struct {
 	OpenAlexID  string        `json:"openalex_id,omitempty"`
 	DisplayName string        `json:"display_name"`
 	Score       float64       `json:"score"`
-	Subfield    OpenAlexTaxon `json:"subfield,omitempty"`
-	Field       OpenAlexTaxon `json:"field,omitempty"`
-	Domain      OpenAlexTaxon `json:"domain,omitempty"`
+	Subfield    OpenAlexTaxon `json:"subfield"`
+	Field       OpenAlexTaxon `json:"field"`
+	Domain      OpenAlexTaxon `json:"domain"`
 }
 
 // OpenAlexTaxon represents a node in the OpenAlex topic taxonomy.

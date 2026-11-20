@@ -543,43 +543,28 @@ func firstISSN(source internal.OpenAlexAPISourceInfo) string {
 // e.g. https://openalex.org/W123 -> W123.
 func stripOpenAlexIDPrefix(id string) string {
 	const prefix = "https://openalex.org/"
-	if strings.HasPrefix(id, prefix) {
-		return strings.TrimPrefix(id, prefix)
-	}
-	return id
+	return strings.TrimPrefix(id, prefix)
 }
 
 // stripDOIPrefix trims the https://doi.org/ prefix from a DOI URL.
 func stripDOIPrefix(doi string) string {
 	const prefix = "https://doi.org/"
-	if strings.HasPrefix(doi, prefix) {
-		return strings.TrimPrefix(doi, prefix)
-	}
-	return doi
+	return strings.TrimPrefix(doi, prefix)
 }
 
 // stripPMIDPrefix trims the PMID: prefix, e.g. PMID:123 -> 123.
 func stripPMIDPrefix(pmid string) string {
-	if strings.HasPrefix(pmid, pmidPrefix) {
-		return strings.TrimPrefix(pmid, pmidPrefix)
-	}
-	return pmid
+	return strings.TrimPrefix(pmid, pmidPrefix)
 }
 
 // stripRORPrefix trims the https://ror.org/ prefix from a ROR URL.
 func stripRORPrefix(ror string) string {
 	const prefix = "https://ror.org/"
-	if strings.HasPrefix(ror, prefix) {
-		return strings.TrimPrefix(ror, prefix)
-	}
-	return ror
+	return strings.TrimPrefix(ror, prefix)
 }
 
 // stripORCIDPrefix trims the https://orcid.org/ prefix from an ORCID URL.
 func stripORCIDPrefix(orcid string) string {
 	const prefix = "https://orcid.org/"
-	if strings.HasPrefix(orcid, prefix) {
-		return strings.TrimPrefix(orcid, prefix)
-	}
-	return orcid
+	return strings.TrimPrefix(orcid, prefix)
 }
