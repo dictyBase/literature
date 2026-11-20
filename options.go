@@ -1,6 +1,7 @@
 package literature
 
 import (
+	"math"
 	"net/http"
 	"time"
 )
@@ -89,23 +90,42 @@ func WithEmail(email string) Option {
 	}
 }
 
-// WithRetryPolicy sets retry behavior for failed requests.
-// maxRetries specifies the maximum number of retry attempts.
-// retryDelay specifies the delay between retries.
+// WithRetryPolicy sets the retry of an E-utilities request that NCBI answers
+// with 429 Too Many Requests. maxRetries is the number of retries, and 0
+// turns retries off. retryDelay is the wait before a retry when the response
+// has no Retry-After header. The defaults are 3 retries and 1 second.
 func WithRetryPolicy(maxRetries int, retryDelay time.Duration) Option {
-	return func(c *Client) error {
-		// For now, we'll store these in the client for future retry implementation
-		// In a full implementation, we'd wrap the HTTP client with retry logic
+	return func(client *Client) error {
+		if maxRetries < 0 || retryDelay < 0 {
+			return &Error{
+				Type:    ErrorTypeInvalidInput,
+				Message: "retry policy values must not be negative",
+			}
+		}
+		client.maxRetries = maxRetries
+		if retryDelay > 0 {
+			client.retryDelay = retryDelay
+		}
 		return nil
 	}
 }
 
-// WithRateLimit sets rate limiting for API requests.
-// requestsPerSecond specifies the maximum number of requests per second.
+// WithRateLimit sets the number of E-utilities requests per second. All
+// clients in the process with the same base URL and API key share one
+// limiter, and the lowest requested rate applies to all of them. The default
+// is 10 with an API key and 3 without one, the NCBI limits. The limiter does
+// not see other processes, so use a lower value when they use the same key.
 func WithRateLimit(requestsPerSecond float64) Option {
-	return func(c *Client) error {
-		// For now, we'll store this in the client for future rate limiting implementation
-		// In a full implementation, we'd add rate limiting middleware
+	return func(client *Client) error {
+		if requestsPerSecond < 0 ||
+			math.IsNaN(requestsPerSecond) ||
+			math.IsInf(requestsPerSecond, 0) {
+			return &Error{
+				Type:    ErrorTypeInvalidInput,
+				Message: "rate limit must be a finite value that is not negative",
+			}
+		}
+		client.rateLimit = requestsPerSecond
 		return nil
 	}
 }

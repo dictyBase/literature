@@ -105,6 +105,16 @@ func (s *ArticleService) FetchArticle(pmid string) (*PubMedArticle, error) {
 	}
 	defer resp.Body.Close()
 
+	// A 429 that outlasted the retries, or any other error status, would
+	// otherwise surface as an XML decode error.
+	if resp.StatusCode != http.StatusOK {
+		return nil, &PDFError{
+			PMID: pmid,
+			Type: PDFErrorArticleNotFound,
+			Err:  fmt.Errorf("efetch returned status %d", resp.StatusCode),
+		}
+	}
+
 	articleSet := &PubMedArticleSet{}
 	if err := xml.NewDecoder(resp.Body).Decode(articleSet); err != nil {
 		return nil, &PDFError{

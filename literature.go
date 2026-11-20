@@ -20,8 +20,20 @@ type Client struct {
 	apiKey         string
 	tool           string
 	email          string
+	rateLimit      float64
+	maxRetries     int
+	retryDelay     time.Duration
 	validate       *validator.Validate
 }
+
+// NCBI request limits for E-utilities: 3 requests per second without an API
+// key and 10 with one. A 429 response gets defaultMaxRetries retries.
+const (
+	rateLimitWithoutKey = 3
+	rateLimitWithKey    = 10
+	defaultMaxRetries   = 3
+	defaultRetryDelay   = time.Second
+)
 
 // New creates a new literature client with the provided options.
 func New(opts ...Option) (*Client, error) {
@@ -29,6 +41,8 @@ func New(opts ...Option) (*Client, error) {
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
 		userAgent:  "literature-go-client/1.0",
+		maxRetries: defaultMaxRetries,
+		retryDelay: defaultRetryDelay,
 		validate:   validator.New(),
 	}
 
@@ -45,14 +59,15 @@ func New(opts ...Option) (*Client, error) {
 		Email:  client.email,
 	}
 
+	ncbiClient := client.ncbiHTTPClient()
 	client.articleService = internal.NewArticleService(
-		internal.WithArticleHTTPClient(client.httpClient),
+		internal.WithArticleHTTPClient(ncbiClient),
 		internal.WithArticleIdentity(identity),
 		internal.WithArticleBaseURL(client.baseURL),
 		internal.WithArticleUserAgent(client.userAgent),
 	)
 	client.searchService = internal.NewSearchService(
-		internal.WithSearchHTTPClient(client.httpClient),
+		internal.WithSearchHTTPClient(ncbiClient),
 		internal.WithSearchIdentity(identity),
 		internal.WithSearchBaseURL(client.baseURL),
 		internal.WithSearchUserAgent(client.userAgent),
@@ -63,6 +78,27 @@ func New(opts ...Option) (*Client, error) {
 	)
 
 	return client, nil
+}
+
+// ncbiHTTPClient copies the HTTP client and wraps its transport with the
+// shared NCBI rate limiter and the 429 retry. Only the E-utilities services
+// use it. PDF downloads go to other hosts and keep the plain client.
+func (c *Client) ncbiHTTPClient() *http.Client {
+	requestsPerSecond := c.rateLimit
+	if requestsPerSecond <= 0 {
+		requestsPerSecond = rateLimitWithoutKey
+		if c.apiKey != "" {
+			requestsPerSecond = rateLimitWithKey
+		}
+	}
+	ncbi := *c.httpClient
+	ncbi.Transport = &internal.NCBITransport{
+		Base:       c.httpClient.Transport,
+		Limiter:    internal.SharedLimiter(c.baseURL, c.apiKey, requestsPerSecond),
+		MaxRetries: c.maxRetries,
+		RetryDelay: c.retryDelay,
+	}
+	return &ncbi
 }
 
 // GetArticle retrieves article metadata for the given PMID.
